@@ -42,13 +42,13 @@ class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
     # Railway proporciona DATABASE_URL automáticamente
-    _db_url = os.environ.get('DATABASE_URL', 'postgresql://user:pass@localhost/compras')
-    # Reemplazar postgres:// con postgresql+pg8000:// para SQLAlchemy 1.4+ con pg8000
-    if _db_url.startswith('postgres://'):
-        _db_url = _db_url.replace('postgres://', 'postgresql+pg8000://', 1)
-    elif _db_url.startswith('postgresql://'):
-        _db_url = _db_url.replace('postgresql://', 'postgresql+pg8000://', 1)
-    SQLALCHEMY_DATABASE_URI = _db_url
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        'DATABASE_URL',
+        'postgresql://user:pass@localhost/compras'
+    )
+    # Reemplazar postgres:// con postgresql:// si es necesario (SQLAlchemy 1.4+)
+    if SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
+        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
 
 
 class TestingConfig(Config):
