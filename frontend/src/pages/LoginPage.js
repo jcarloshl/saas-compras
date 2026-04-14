@@ -2,11 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
-const CATEGORIAS = [
-  'Frutas y Verduras', 'Carnes y Pescados', 'Lácteos y Huevos',
-  'Panadería', 'Bebidas', 'Limpieza', 'Higiene Personal',
-  'Congelados', 'Enlatados y Conservas', 'Snacks y Dulces', 'Otros'
-];
 
 export default function LoginPage() {
   const navigate = useNavigate();
