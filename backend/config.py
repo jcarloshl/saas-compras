@@ -10,9 +10,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = os.environ.get('FLASK_ENV') == 'development'
 
-    # Email (mantenido del proyecto original)
+    # Email
     EMAIL_REMITENTE = os.environ.get('EMAIL_REMITENTE')
     EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
     # Categorías (del proyecto original)
     CATEGORIAS = [

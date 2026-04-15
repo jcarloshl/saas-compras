@@ -1,5 +1,11 @@
 """Main Flask application"""
 import os
+import smtplib
+import ssl
+import jwt
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import get_config
@@ -80,6 +86,129 @@ def get_me(user_id):
         return jsonify({'error': 'User not found'}), 404
 
     return jsonify(user.to_dict()), 200
+
+
+def _create_reset_token(user_id, pwd_hash):
+    """Generar JWT de un solo uso para reseteo de contraseña (expira en 1 hora)"""
+    payload = {
+        'user_id': user_id,
+        'action': 'reset',
+        'pwd_fp': pwd_hash[-12:],   # fingerprint: invalida el token si la contraseña ya cambió
+        'exp': datetime.utcnow() + timedelta(hours=1),
+    }
+    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+
+def _verify_reset_token(token):
+    """Verificar token de reseteo. Retorna (user_id, pwd_fingerprint) o (None, None)"""
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        if payload.get('action') != 'reset':
+            return None, None
+        return payload['user_id'], payload['pwd_fp']
+    except jwt.ExpiredSignatureError:
+        return None, None
+    except jwt.InvalidTokenError:
+        return None, None
+
+
+def _send_reset_email(to_email, username, reset_link):
+    """Enviar email con enlace de recuperación de contraseña"""
+    remitente = app.config.get('EMAIL_REMITENTE')
+    password = app.config.get('EMAIL_PASSWORD')
+
+    if not remitente or not password:
+        # En desarrollo sin credenciales, sólo loggear
+        app.logger.info(f"[DEV] Enlace de reset para {to_email}: {reset_link}")
+        return
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = 'Recuperar contraseña - Lista de Compras'
+    msg['From'] = remitente
+    msg['To'] = to_email
+
+    html_body = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <h2 style="color:#0d6efd">🛒 Lista de Compras</h2>
+      <p>Hola <strong>{username}</strong>,</p>
+      <p>Recibimos una solicitud para restablecer tu contraseña.
+         Haz clic en el botón para crear una nueva:</p>
+      <a href="{reset_link}"
+         style="display:inline-block;padding:12px 24px;background:#0d6efd;
+                color:#fff;text-decoration:none;border-radius:6px;margin:16px 0">
+        Restablecer contraseña
+      </a>
+      <p style="color:#666;font-size:0.85rem">
+        Este enlace expira en <strong>1 hora</strong>.<br>
+        Si no solicitaste esto, ignora este mensaje.
+      </p>
+    </div>
+    """
+    msg.attach(MIMEText(html_body, 'html'))
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
+        server.login(remitente, password)
+        server.sendmail(remitente, to_email, msg.as_string())
+
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Solicitar enlace de recuperación de contraseña"""
+    data = request.json or {}
+    email = data.get('email', '').strip().lower()
+
+    if not email:
+        return jsonify({'error': 'El email es requerido'}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    # Siempre responder 200 para no revelar si el email existe (user enumeration)
+    if not user:
+        return jsonify({'message': 'Si el email está registrado, recibirás un enlace de recuperación.'}), 200
+
+    token = _create_reset_token(user.id, user.password_hash)
+    frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
+    reset_link = f"{frontend_url}/reset-password?token={token}"
+
+    try:
+        _send_reset_email(user.email, user.username, reset_link)
+    except Exception as e:
+        app.logger.error(f"Error enviando email de reset a {user.email}: {e}")
+        return jsonify({'error': 'No se pudo enviar el email. Intenta más tarde.'}), 500
+
+    return jsonify({'message': 'Si el email está registrado, recibirás un enlace de recuperación.'}), 200
+
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Restablecer contraseña usando token de recuperación"""
+    data = request.json or {}
+    token = data.get('token', '').strip()
+    new_password = data.get('password', '')
+
+    if not token or not new_password:
+        return jsonify({'error': 'Token y contraseña son requeridos'}), 400
+
+    if len(new_password) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+
+    user_id, pwd_fp = _verify_reset_token(token)
+    if not user_id:
+        return jsonify({'error': 'El enlace es inválido o ha expirado'}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'Usuario no encontrado'}), 404
+
+    # Validar fingerprint: si la contraseña ya cambió, el token no es válido
+    if user.password_hash[-12:] != pwd_fp:
+        return jsonify({'error': 'El enlace ya fue utilizado o es inválido'}), 400
+
+    user.set_password(new_password)
+    db.session.commit()
+
+    return jsonify({'message': 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.'}), 200
 
 
 # ─────────────────────────────────────────────

@@ -40,6 +40,10 @@ export const authAPI = {
   login: (email, password) =>
     api.post('/api/auth/login', { email, password }),
   getMe: () => api.get('/api/auth/me'),
+  forgotPassword: (email) =>
+    api.post('/api/auth/forgot-password', { email }),
+  resetPassword: (token, password) =>
+    api.post('/api/auth/reset-password', { token, password }),
 };
 
 // Lists APIs

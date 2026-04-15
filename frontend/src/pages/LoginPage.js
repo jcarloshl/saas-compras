@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
 
@@ -100,11 +100,18 @@ export default function LoginPage() {
               />
             </div>
             <div className="mb-3">
-              <label className="form-label small fw-semibold">Contraseña</label>
+              <div className="d-flex justify-content-between align-items-center">
+                <label className="form-label small fw-semibold mb-0">Contraseña</label>
+                {!isRegister && (
+                  <Link to="/forgot-password" className="small text-muted">
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                )}
+              </div>
               <input
                 type="password"
                 name="password"
-                className="form-control"
+                className="form-control mt-1"
                 placeholder="••••••••"
                 value={form.password}
                 onChange={handleChange}
