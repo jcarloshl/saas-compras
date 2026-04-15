@@ -59,19 +59,28 @@ export default function ListPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [listRes, itemsRes, catalogRes] = await Promise.all([
-        listsAPI.get(id),
-        itemsAPI.getAll(id),
-        itemsAPI.getCatalog(id),
-      ]);
-      setListInfo(listRes.data);
+      // Carga crítica: artículos y stats de la lista
+      const itemsRes = await itemsAPI.getAll(id);
       setItems(itemsRes.data.items);
       setStats(itemsRes.data.stats);
-      setCatalog(catalogRes.data);
     } catch {
       setError('Error al cargar la lista');
     } finally {
       setLoading(false);
+    }
+    // Nombre de la lista (no crítico — solo para mostrar en la navbar)
+    try {
+      const listRes = await listsAPI.get(id);
+      setListInfo(listRes.data);
+    } catch {
+      // ignorar; la navbar mostrará el valor por defecto 'Lista'
+    }
+    // Catálogo para autocompletar (no crítico — no bloquea la carga de artículos)
+    try {
+      const catalogRes = await itemsAPI.getCatalog(id);
+      setCatalog(catalogRes.data);
+    } catch {
+      // ignorar
     }
   }, [id]);
 

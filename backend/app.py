@@ -394,17 +394,24 @@ def reset_list(user_id, list_id):
 @app.route('/api/lists/<int:list_id>/catalog', methods=['GET'])
 @token_required
 def get_catalog(user_id, list_id):
-    """Obtener catálogo de artículos para autocompletar"""
+    """Obtener catálogo de artículos para autocompletar (global: todas las listas del usuario)"""
     lst = ShoppingList.query.get(list_id)
     if not lst or lst.user_id != user_id:
         return jsonify({'error': 'List not found'}), 404
 
-    # Crear catálogo único de todos los items
+    # Obtener artículos únicos de TODAS las listas del usuario (no solo la actual)
+    all_items = (
+        ShoppingItem.query
+        .join(ShoppingList, ShoppingItem.list_id == ShoppingList.id)
+        .filter(ShoppingList.user_id == user_id)
+        .all()
+    )
+
     catalog = []
     seen = set()
 
-    for item in lst.items:
-        key = (item.articulo.lower(), item.categoria)
+    for item in all_items:
+        key = item.articulo.lower()
         if key not in seen:
             catalog.append({
                 'articulo': item.articulo,
