@@ -3,6 +3,7 @@ import os
 import smtplib
 import ssl
 import jwt
+import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -147,9 +148,20 @@ def _send_reset_email(to_email, username, reset_link):
     msg.attach(MIMEText(html_body, 'html'))
 
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context, timeout=10) as server:
         server.login(remitente, password)
         server.sendmail(remitente, to_email, msg.as_string())
+
+
+def _send_reset_email_bg(to_email, username, reset_link):
+    """Lanzar envío de email en hilo de fondo para no bloquear el request"""
+    def _run():
+        try:
+            _send_reset_email(to_email, username, reset_link)
+        except Exception as e:
+            app.logger.error(f"Error enviando email de reset a {to_email}: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
@@ -171,11 +183,8 @@ def forgot_password():
     frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
     reset_link = f"{frontend_url}/reset-password?token={token}"
 
-    try:
-        _send_reset_email(user.email, user.username, reset_link)
-    except Exception as e:
-        app.logger.error(f"Error enviando email de reset a {user.email}: {e}")
-        return jsonify({'error': 'No se pudo enviar el email. Intenta más tarde.'}), 500
+    # Enviar en segundo plano: el usuario recibe respuesta inmediata
+    _send_reset_email_bg(user.email, user.username, reset_link)
 
     return jsonify({'message': 'Si el email está registrado, recibirás un enlace de recuperación.'}), 200
 
