@@ -229,7 +229,15 @@ def reset_password():
 def get_lists(user_id):
     """Obtener todas mis listas"""
     lists = ShoppingList.query.filter_by(user_id=user_id).all()
-    return jsonify([lst.to_dict() for lst in lists]), 200
+    result = []
+    for lst in lists:
+        d = lst.to_dict()
+        total = len(lst.items)
+        comprados = sum(1 for it in lst.items if it.comprado)
+        d['pendientes'] = total - comprados
+        d['total'] = total
+        result.append(d)
+    return jsonify(result), 200
 
 
 @app.route('/api/lists', methods=['POST'])

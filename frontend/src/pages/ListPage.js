@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { listsAPI, itemsAPI } from '../api';
@@ -56,6 +56,7 @@ export default function ListPage() {
 
   // Filtro por categoría
   const [filterCat, setFilterCat] = useState('Todas');
+  const [showToast, setShowToast] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -91,7 +92,7 @@ export default function ListPage() {
   // Autocompletar
   const handleArticuloChange = (value) => {
     setForm(f => ({ ...f, articulo: value }));
-    if (value.length >= 2) {
+    if (value.length >= 1) {
       const filtered = catalog.filter(c =>
         c.articulo.toLowerCase().includes(value.toLowerCase())
       );
@@ -127,6 +128,13 @@ export default function ListPage() {
           ? Math.round(prev.comprados / (prev.total + 1) * 100)
           : 0,
       }));
+      // Agregar al catálogo local si no existe ya (para autocompletar inmediatamente)
+      const nuevoArticulo = form.articulo.trim();
+      setCatalog(prev => {
+        if (prev.some(c => c.articulo.toLowerCase() === nuevoArticulo.toLowerCase())) return prev;
+        return [...prev, { articulo: nuevoArticulo, categoria: form.categoria }]
+          .sort((a, b) => a.articulo.toLowerCase().localeCompare(b.articulo.toLowerCase()));
+      });
       setForm(f => ({ ...f, articulo: '', cantidad: '1', categoria: 'Otros' }));
       setSuggestions([]);
     } catch {
@@ -142,10 +150,15 @@ export default function ListPage() {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, comprado: newVal } : i));
     setStats(prev => {
       const comprados = newVal ? prev.comprados + 1 : prev.comprados - 1;
+      const pendientes = prev.total - comprados;
+      if (pendientes === 0 && prev.total > 0) {
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      }
       return {
         ...prev,
         comprados,
-        pendientes: prev.total - comprados,
+        pendientes,
         porcentaje: prev.total > 0 ? Math.round(comprados / prev.total * 100) : 0,
       };
     });
@@ -188,14 +201,18 @@ export default function ListPage() {
     }
   };
 
+  // Normaliza categorías desconocidas (ej: del backend) a 'Otros'
+  const normalizarCategoria = (cat) =>
+    CATEGORIAS.includes(cat) ? cat : 'Otros';
+
   // Items filtrados por categoría
   const filteredItems = filterCat === 'Todas'
     ? items
-    : items.filter(i => i.categoria === filterCat);
+    : items.filter(i => normalizarCategoria(i.categoria) === filterCat);
 
   // Agrupar por categoría para mostrar
   const grouped = filteredItems.reduce((acc, item) => {
-    const cat = item.categoria || 'Otros';
+    const cat = normalizarCategoria(item.categoria);
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(item);
     return acc;
@@ -310,25 +327,29 @@ export default function ListPage() {
                       </ul>
                     )}
                   </div>
-                  <div className="col-6 col-sm-2">
+                  <div className="col-auto">
                     <input
                       type="text"
                       className="form-control"
                       placeholder="Cantidad"
                       value={form.cantidad}
                       onChange={e => setForm(f => ({ ...f, cantidad: e.target.value }))}
+                      style={{ width: '8ch' }}
                     />
                   </div>
-                  <div className="col-6 col-sm-3">
-                    <select
-                      className="form-select"
-                      value={form.categoria}
-                      onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-                    >
-                      {CATEGORIAS.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                  <div className="col col-sm-3">
+                    <div className="input-group">
+                      <span className="input-group-text">Categoría</span>
+                      <select
+                        className="form-select"
+                        value={form.categoria}
+                        onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+                      >
+                        {CATEGORIAS.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div className="col-12 col-sm-2 d-flex gap-2">
                     <button
@@ -409,6 +430,28 @@ export default function ListPage() {
           ))
         )}
       </div>
+
+      {/* Toast: compras completadas */}
+      {showToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '2rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1055,
+            minWidth: '220px',
+            textAlign: 'center',
+          }}
+        >
+          <div className="toast show align-items-center text-bg-success border-0 shadow-lg">
+            <div className="d-flex justify-content-center align-items-center gap-2 p-3">
+              <span style={{ fontSize: '1.4rem' }}>🎉</span>
+              <strong>¡Compras listas!</strong>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

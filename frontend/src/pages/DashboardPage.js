@@ -162,6 +162,15 @@ export default function DashboardPage() {
                     <p className="text-muted small mb-3">
                       Creada el {formatDate(lst.created_at)}
                     </p>
+                    {lst.total > 0 && (
+                      <p className="mb-2">
+                        <span className={`badge ${lst.pendientes > 0 ? 'bg-warning text-dark' : 'bg-success'}`}>
+                          {lst.pendientes > 0
+                            ? `${lst.pendientes} pendiente${lst.pendientes !== 1 ? 's' : ''}`
+                            : '✓ Todo comprado'}
+                        </span>
+                      </p>
+                    )}
                     <div className="mt-auto d-flex gap-2">
                       <button
                         className="btn btn-primary btn-sm flex-fill"
