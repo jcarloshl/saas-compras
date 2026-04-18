@@ -30,6 +30,15 @@ export default function DashboardPage() {
     fetchLists();
   }, [fetchLists]);
 
+  // Refetch al volver al tab o a la página
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchLists();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fetchLists]);
+
   const handleCreate = async (e) => {
     e.preventDefault();
     const name = newName.trim() || 'Mi lista';
