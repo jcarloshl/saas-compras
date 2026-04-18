@@ -73,6 +73,13 @@ export default function DashboardPage() {
           <span className="navbar-brand">🛒 Mis Listas</span>
           <div className="d-flex align-items-center gap-3">
             <span className="text-white small">Hola, {user?.username}</span>
+            <button
+              className="btn btn-outline-light btn-sm"
+              onClick={() => navigate('/history')}
+              title="Historial de compras"
+            >
+              Historial
+            </button>
             <button className="btn btn-outline-light btn-sm" onClick={logout}>
               Salir
             </button>

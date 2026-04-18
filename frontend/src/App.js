@@ -11,6 +11,7 @@ const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 const ListPage = React.lazy(() => import('./pages/ListPage'));
 const ForgotPasswordPage = React.lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = React.lazy(() => import('./pages/ResetPasswordPage'));
+const HistoryPage = React.lazy(() => import('./pages/HistoryPage'));
 
 // Componente para rutas protegidas
 function ProtectedRoute({ children }) {
@@ -45,6 +46,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <HistoryPage />
                 </ProtectedRoute>
               }
             />

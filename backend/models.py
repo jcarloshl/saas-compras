@@ -89,6 +89,33 @@ class ShoppingItem(db.Model):
         }
 
 
+class PurchaseHistory(db.Model):
+    """Historial de artículos comprados"""
+    __tablename__ = 'purchase_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    list_id = db.Column(db.Integer, nullable=False)
+    list_name = db.Column(db.String(200))
+    articulo = db.Column(db.String(200), nullable=False)
+    cantidad = db.Column(db.String(50), default='1')
+    categoria = db.Column(db.String(100), default='Otros')
+    agregado_por = db.Column(db.String(100), default='')
+    fecha_compra = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'list_id': self.list_id,
+            'list_name': self.list_name,
+            'articulo': self.articulo,
+            'cantidad': self.cantidad,
+            'categoria': self.categoria,
+            'agregado_por': self.agregado_por,
+            'fecha_compra': self.fecha_compra.isoformat(),
+        }
+
+
 def _es_comprado(valor) -> bool:
     """Centraliza la comparación del estado 'Comprado'"""
     return valor in (True, "TRUE", "✓")

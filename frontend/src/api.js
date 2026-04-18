@@ -72,4 +72,9 @@ export const itemsAPI = {
   getCatalog: (listId) => api.get(`/api/lists/${listId}/catalog`),
 };
 
+// History API
+export const historyAPI = {
+  get: (period = 'all') => api.get(`/api/history?period=${period}`),
+};
+
 export default api;

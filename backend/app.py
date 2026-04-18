@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import get_config
-from models import db, User, ShoppingList, ShoppingItem, _es_comprado
+from models import db, User, ShoppingList, ShoppingItem, PurchaseHistory, _es_comprado
 from auth import create_token, token_required, verify_token
 
 app = Flask(__name__)
@@ -21,7 +21,8 @@ app.config.from_object(config)
 
 # Inicializar extensions
 db.init_app(app)
-CORS(app)
+frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
+CORS(app, origins=[frontend_url, 'http://localhost:3000'])
 
 
 with app.app_context():
@@ -353,7 +354,18 @@ def update_item(user_id, list_id, item_id):
 
     # Permitir actualizar: comprado, cantidad, categoria, agregado_por
     if 'comprado' in data:
+        was_comprado = item.comprado
         item.comprado = data['comprado']
+        if data['comprado'] and not was_comprado:
+            db.session.add(PurchaseHistory(
+                user_id=user_id,
+                list_id=list_id,
+                list_name=lst.name,
+                articulo=item.articulo,
+                cantidad=item.cantidad,
+                categoria=item.categoria,
+                agregado_por=item.agregado_por,
+            ))
     if 'cantidad' in data:
         item.cantidad = data['cantidad']
     if 'categoria' in data:
@@ -431,6 +443,38 @@ def get_catalog(user_id, list_id):
     catalog.sort(key=lambda x: x['articulo'].lower())
 
     return jsonify(catalog), 200
+
+
+# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  HISTORIAL DE COMPRAS
+# ─────────────────────────────────────────────
+
+@app.route('/api/history', methods=['GET'])
+@token_required
+def get_history(user_id):
+    """Historial de artículos comprados, filtrable por período (YYYY-MM) o 'all'"""
+    period = request.args.get('period', 'all')
+    query = PurchaseHistory.query.filter_by(user_id=user_id)
+
+    if period != 'all':
+        try:
+            year, month = map(int, period.split('-'))
+            start = datetime(year, month, 1)
+            end = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+            query = query.filter(
+                PurchaseHistory.fecha_compra >= start,
+                PurchaseHistory.fecha_compra < end
+            )
+        except (ValueError, AttributeError):
+            return jsonify({'error': 'Período inválido. Usar formato YYYY-MM'}), 400
+
+    items = query.order_by(PurchaseHistory.fecha_compra.desc()).all()
+    return jsonify({
+        'items': [i.to_dict() for i in items],
+        'total': len(items),
+        'periodo': period,
+    }), 200
 
 
 # ─────────────────────────────────────────────
