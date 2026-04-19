@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="128" fill="url(#greenGradient)"/>
+
+  <g transform="translate(80, 120)">
+    <circle cx="60" cy="240" r="20" fill="white"/>
+    <circle cx="240" cy="240" r="20" fill="white"/>
+    <path d="M 30 90 L 80 230 L 220 230 L 270 90 Z"
+          stroke="white" stroke-width="8" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="80" y1="140" x2="220" y2="140"
+          stroke="white" stroke-width="8" stroke-linecap="round"/>
+    <path d="M 75 90 Q 85 30 125 25 Q 155 25 165 90"
+          stroke="white" stroke-width="8" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="110" cy="120" r="18" fill="white" opacity="0.85"/>
+    <circle cx="175" cy="105" r="22" fill="white" opacity="0.85"/>
+    <rect x="130" y="155" width="20" height="20" fill="white" opacity="0.85"/>
+    <path d="M 65 170 L 80 160 L 90 175"
+          stroke="white" stroke-width="6" fill="none"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

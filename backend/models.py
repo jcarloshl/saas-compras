@@ -116,6 +116,29 @@ class PurchaseHistory(db.Model):
         }
 
 
+class CatalogItem(db.Model):
+    """Catálogo de artículos del usuario (sugerencias de autocompletado)"""
+    __tablename__ = 'catalog_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    articulo = db.Column(db.String(200), nullable=False)
+    categoria = db.Column(db.String(100), default='Otros')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'articulo', name='uq_catalog_user_articulo'),)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'articulo': self.articulo,
+            'categoria': self.categoria,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
+
+
 def _es_comprado(valor) -> bool:
     """Centraliza la comparación del estado 'Comprado'"""
     return valor in (True, "TRUE", "✓")

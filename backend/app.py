@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import get_config
-from models import db, User, ShoppingList, ShoppingItem, PurchaseHistory, _es_comprado
+from models import db, User, ShoppingList, ShoppingItem, PurchaseHistory, CatalogItem, _es_comprado
 from auth import create_token, token_required, verify_token
 
 app = Flask(__name__)
@@ -325,14 +325,25 @@ def add_item(user_id, list_id):
     if not data.get('articulo'):
         return jsonify({'error': 'Articulo is required'}), 400
 
+    articulo = data.get('articulo')
+    categoria = data.get('categoria', 'Otros')
+
     item = ShoppingItem(
         list_id=list_id,
-        articulo=data.get('articulo'),
+        articulo=articulo,
         cantidad=data.get('cantidad', '1'),
-        categoria=data.get('categoria', 'Otros'),
+        categoria=categoria,
         agregado_por=data.get('agregado_por', ''),
     )
     db.session.add(item)
+
+    # Upsert en catálogo: si ya existe el artículo actualiza categoría, sino lo crea
+    catalog_entry = CatalogItem.query.filter_by(user_id=user_id, articulo=articulo).first()
+    if catalog_entry:
+        catalog_entry.categoria = categoria
+    else:
+        db.session.add(CatalogItem(user_id=user_id, articulo=articulo, categoria=categoria))
+
     db.session.commit()
 
     return jsonify(item.to_dict()), 201
@@ -419,30 +430,25 @@ def get_catalog(user_id, list_id):
     if not lst or lst.user_id != user_id:
         return jsonify({'error': 'List not found'}), 404
 
-    # Obtener artículos únicos de TODAS las listas del usuario (no solo la actual)
+    # Primero: entradas del catálogo persistido del usuario
+    catalog_entries = CatalogItem.query.filter_by(user_id=user_id).all()
+    catalog = {e.articulo.lower(): {'articulo': e.articulo, 'categoria': e.categoria}
+               for e in catalog_entries}
+
+    # Fallback: artículos de ShoppingItems no presentes aún en el catálogo
     all_items = (
         ShoppingItem.query
         .join(ShoppingList, ShoppingItem.list_id == ShoppingList.id)
         .filter(ShoppingList.user_id == user_id)
         .all()
     )
-
-    catalog = []
-    seen = set()
-
     for item in all_items:
         key = item.articulo.lower()
-        if key not in seen:
-            catalog.append({
-                'articulo': item.articulo,
-                'categoria': item.categoria,
-            })
-            seen.add(key)
+        if key not in catalog:
+            catalog[key] = {'articulo': item.articulo, 'categoria': item.categoria}
 
-    # Ordenar alfabéticamente
-    catalog.sort(key=lambda x: x['articulo'].lower())
-
-    return jsonify(catalog), 200
+    result = sorted(catalog.values(), key=lambda x: x['articulo'].lower())
+    return jsonify(result), 200
 
 
 # ─────────────────────────────────────────────
@@ -475,6 +481,54 @@ def get_history(user_id):
         'total': len(items),
         'periodo': period,
     }), 200
+
+
+# ─────────────────────────────────────────────
+#  CATÁLOGO DE ARTÍCULOS
+# ─────────────────────────────────────────────
+
+@app.route('/api/catalog', methods=['GET'])
+@token_required
+def get_catalog_items(user_id):
+    """Listar todas las entradas del catálogo del usuario"""
+    entries = CatalogItem.query.filter_by(user_id=user_id).order_by(CatalogItem.articulo).all()
+    return jsonify([e.to_dict() for e in entries]), 200
+
+
+@app.route('/api/catalog/<int:entry_id>', methods=['PUT'])
+@token_required
+def update_catalog_item(user_id, entry_id):
+    """Editar artículo o categoría de una entrada del catálogo"""
+    entry = CatalogItem.query.get(entry_id)
+    if not entry or entry.user_id != user_id:
+        return jsonify({'error': 'Entrada no encontrada'}), 404
+
+    data = request.json or {}
+    if 'articulo' in data and data['articulo'].strip():
+        # Verificar que el nuevo nombre no duplique otro existente
+        nuevo = data['articulo'].strip()
+        existing = CatalogItem.query.filter_by(user_id=user_id, articulo=nuevo).first()
+        if existing and existing.id != entry_id:
+            return jsonify({'error': 'Ya existe un artículo con ese nombre'}), 409
+        entry.articulo = nuevo
+    if 'categoria' in data:
+        entry.categoria = data['categoria']
+
+    db.session.commit()
+    return jsonify(entry.to_dict()), 200
+
+
+@app.route('/api/catalog/<int:entry_id>', methods=['DELETE'])
+@token_required
+def delete_catalog_item(user_id, entry_id):
+    """Eliminar una entrada del catálogo"""
+    entry = CatalogItem.query.get(entry_id)
+    if not entry or entry.user_id != user_id:
+        return jsonify({'error': 'Entrada no encontrada'}), 404
+
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'message': 'Eliminado'}), 200
 
 
 # ─────────────────────────────────────────────

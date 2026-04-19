@@ -84,6 +84,13 @@ export default function DashboardPage() {
             <span className="text-white small">Hola, {user?.username}</span>
             <button
               className="btn btn-outline-light btn-sm"
+              onClick={() => navigate('/catalog')}
+              title="Catálogo de artículos"
+            >
+              Catálogo
+            </button>
+            <button
+              className="btn btn-outline-light btn-sm"
               onClick={() => navigate('/history')}
               title="Historial de compras"
             >

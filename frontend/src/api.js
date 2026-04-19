@@ -77,4 +77,11 @@ export const historyAPI = {
   get: (period = 'all') => api.get(`/api/history?period=${period}`),
 };
 
+// Catalog API
+export const catalogAPI = {
+  getAll: () => api.get('/api/catalog'),
+  update: (id, data) => api.put(`/api/catalog/${id}`, data),
+  delete: (id) => api.delete(`/api/catalog/${id}`),
+};
+
 export default api;
