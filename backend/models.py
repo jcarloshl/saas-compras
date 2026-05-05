@@ -44,6 +44,7 @@ class ShoppingList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     name = db.Column(db.String(200), default='Mi lista')
+    monto_total = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -54,6 +55,7 @@ class ShoppingList(db.Model):
         data = {
             'id': self.id,
             'name': self.name,
+            'monto_total': self.monto_total,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
         }

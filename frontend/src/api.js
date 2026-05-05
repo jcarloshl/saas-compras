@@ -51,6 +51,7 @@ export const listsAPI = {
   getAll: () => api.get('/api/lists'),
   create: (name) => api.post('/api/lists', { name }),
   get: (id) => api.get(`/api/lists/${id}`),
+  update: (id, data) => api.put(`/api/lists/${id}`, data),
   delete: (id) => api.delete(`/api/lists/${id}`),
 };
 

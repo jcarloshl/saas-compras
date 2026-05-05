@@ -3,24 +3,38 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { listsAPI } from '../api';
 
+const CACHE_KEY = 'dashboard_lists';
+
+function loadCache() {
+  try { return JSON.parse(sessionStorage.getItem(CACHE_KEY)) || null; } catch { return null; }
+}
+function saveCache(data) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch {}
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const [lists, setLists] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [lists, setLists] = useState(() => loadCache() || []);
+  const [loading, setLoading] = useState(!loadCache());
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
 
+  // Edición inline del monto total
+  const [editingTotalId, setEditingTotalId] = useState(null);
+  const [editingTotalValue, setEditingTotalValue] = useState('');
+
   const fetchLists = useCallback(async () => {
     try {
       const res = await listsAPI.getAll();
       setLists(res.data);
+      saveCache(res.data);
     } catch {
-      setError('No se pudo cargar las listas');
+      if (!loadCache()) setError('No se pudo cargar las listas');
     } finally {
       setLoading(false);
     }
@@ -45,7 +59,9 @@ export default function DashboardPage() {
     setCreating(true);
     try {
       const res = await listsAPI.create(name);
-      setLists([...lists, res.data]);
+      const updated = [...lists, res.data];
+      setLists(updated);
+      saveCache(updated);
       setNewName('');
       setShowForm(false);
     } catch {
@@ -60,7 +76,9 @@ export default function DashboardPage() {
     setDeletingId(id);
     try {
       await listsAPI.delete(id);
-      setLists(lists.filter(l => l.id !== id));
+      const updated = lists.filter(l => l.id !== id);
+      setLists(updated);
+      saveCache(updated);
     } catch {
       setError('Error al eliminar la lista');
     } finally {
@@ -68,10 +86,35 @@ export default function DashboardPage() {
     }
   };
 
+  const startEditTotal = (lst) => {
+    setEditingTotalId(lst.id);
+    setEditingTotalValue(lst.monto_total != null ? String(lst.monto_total) : '');
+  };
+
+  const handleSaveTotal = async (id) => {
+    const raw = editingTotalValue.trim();
+    const val = raw === '' ? null : parseFloat(raw.replace(',', '.'));
+    if (val !== null && isNaN(val)) return;
+    try {
+      const res = await listsAPI.update(id, { monto_total: val });
+      const updated = lists.map(l => l.id === id ? { ...l, monto_total: res.data.monto_total } : l);
+      setLists(updated);
+      saveCache(updated);
+    } catch {
+      setError('Error al guardar el monto');
+    } finally {
+      setEditingTotalId(null);
+    }
+  };
+
   const formatDate = (iso) => {
     return new Date(iso).toLocaleDateString('es-ES', {
       day: '2-digit', month: 'short', year: 'numeric'
     });
+  };
+
+  const formatMonto = (val) => {
+    return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   return (
@@ -182,9 +225,11 @@ export default function DashboardPage() {
                 <div className="card h-100">
                   <div className="card-body d-flex flex-column">
                     <h6 className="card-title fw-bold mb-1">{lst.name}</h6>
-                    <p className="text-muted small mb-3">
+                    <p className="text-muted small mb-2">
                       Creada el {formatDate(lst.created_at)}
                     </p>
+
+                    {/* Badge estado items */}
                     {lst.total > 0 && (
                       <p className="mb-2">
                         <span className={`badge ${lst.pendientes > 0 ? 'bg-warning text-dark' : 'bg-success'}`}>
@@ -194,6 +239,57 @@ export default function DashboardPage() {
                         </span>
                       </p>
                     )}
+
+                    {/* Monto total de la compra */}
+                    <div className="mb-3">
+                      {editingTotalId === lst.id ? (
+                        <div className="d-flex gap-1">
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            placeholder="0.00"
+                            value={editingTotalValue}
+                            onChange={e => setEditingTotalValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveTotal(lst.id);
+                              if (e.key === 'Escape') setEditingTotalId(null);
+                            }}
+                            autoFocus
+                            min="0"
+                            step="0.01"
+                            style={{ maxWidth: '120px' }}
+                          />
+                          <button
+                            className="btn btn-success btn-sm"
+                            onClick={() => handleSaveTotal(lst.id)}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() => setEditingTotalId(null)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : lst.monto_total != null ? (
+                        <button
+                          className="btn btn-link btn-sm p-0 text-success fw-semibold"
+                          onClick={() => startEditTotal(lst)}
+                          title="Editar monto"
+                        >
+                          💰 ${formatMonto(lst.monto_total)}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-link btn-sm p-0 text-muted"
+                          onClick={() => startEditTotal(lst)}
+                        >
+                          + Agregar total de compra
+                        </button>
+                      )}
+                    </div>
+
                     <div className="mt-auto d-flex gap-2">
                       <button
                         className="btn btn-primary btn-sm flex-fill"

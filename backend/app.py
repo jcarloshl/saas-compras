@@ -266,6 +266,25 @@ def get_list(user_id, list_id):
     return jsonify(lst.to_dict(include_items=True)), 200
 
 
+@app.route('/api/lists/<int:list_id>', methods=['PUT'])
+@token_required
+def update_list(user_id, list_id):
+    """Actualizar nombre y/o monto_total de una lista"""
+    lst = ShoppingList.query.get(list_id)
+    if not lst or lst.user_id != user_id:
+        return jsonify({'error': 'List not found'}), 404
+
+    data = request.json or {}
+    if 'name' in data and data['name'].strip():
+        lst.name = data['name'].strip()
+    if 'monto_total' in data:
+        val = data['monto_total']
+        lst.monto_total = float(val) if val not in (None, '') else None
+
+    db.session.commit()
+    return jsonify(lst.to_dict()), 200
+
+
 @app.route('/api/lists/<int:list_id>', methods=['DELETE'])
 @token_required
 def delete_list(user_id, list_id):
