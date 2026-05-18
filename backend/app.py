@@ -6,6 +6,7 @@ import jwt
 import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from collections import defaultdict
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -495,10 +496,22 @@ def get_history(user_id):
             return jsonify({'error': 'Período inválido. Usar formato YYYY-MM'}), 400
 
     items = query.order_by(PurchaseHistory.fecha_compra.desc()).all()
+
+    monto_total_periodo = None
+    unique_list_ids = list({i.list_id for i in items})
+    if unique_list_ids:
+        listas = ShoppingList.query.filter(
+            ShoppingList.id.in_(unique_list_ids),
+            ShoppingList.monto_total.isnot(None)
+        ).all()
+        if listas:
+            monto_total_periodo = sum(l.monto_total for l in listas)
+
     return jsonify({
         'items': [i.to_dict() for i in items],
         'total': len(items),
         'periodo': period,
+        'monto_total_periodo': monto_total_periodo,
     }), 200
 
 
@@ -548,6 +561,112 @@ def delete_catalog_item(user_id, entry_id):
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'message': 'Eliminado'}), 200
+
+
+# ─────────────────────────────────────────────
+#  LISTA SUGERIDA SEMANAL
+# ─────────────────────────────────────────────
+
+def _calcular_sugeridos(user_id):
+    """Devuelve artículos comprados las 4 semanas ISO completas anteriores a la actual."""
+    hoy = datetime.utcnow()
+    inicio_semana_actual = hoy - timedelta(days=hoy.weekday())
+    cutoff_ini = inicio_semana_actual - timedelta(weeks=4)
+    cutoff_fin = inicio_semana_actual
+
+    # Semanas ISO esperadas (exactamente 4)
+    semanas_esperadas = set()
+    for i in range(4):
+        d = cutoff_ini + timedelta(weeks=i)
+        semanas_esperadas.add(d.isocalendar()[1])
+
+    history = PurchaseHistory.query.filter(
+        PurchaseHistory.user_id == user_id,
+        PurchaseHistory.fecha_compra >= cutoff_ini,
+        PurchaseHistory.fecha_compra < cutoff_fin,
+    ).all()
+
+    semanas_disponibles = len({h.fecha_compra.isocalendar()[1] for h in history})
+
+    article_weeks = defaultdict(set)
+    article_data = defaultdict(list)
+    for h in history:
+        week = h.fecha_compra.isocalendar()[1]
+        article_weeks[h.articulo].add(week)
+        article_data[h.articulo].append({'cantidad': h.cantidad, 'categoria': h.categoria})
+
+    sugeridos = []
+    for articulo, weeks in article_weeks.items():
+        if weeks != semanas_esperadas:
+            continue
+        cantidades = [d['cantidad'] for d in article_data[articulo]]
+        categorias = [d['categoria'] for d in article_data[articulo]]
+        sugeridos.append({
+            'articulo': articulo,
+            'cantidad': max(set(cantidades), key=cantidades.count),
+            'categoria': max(set(categorias), key=categorias.count),
+        })
+
+    sugeridos.sort(key=lambda x: (x['categoria'], x['articulo']))
+    return sugeridos, semanas_disponibles
+
+
+@app.route('/api/suggested-list', methods=['GET'])
+@token_required
+def get_suggested_list(user_id):
+    """Preview de artículos recurrentes en las últimas 4 semanas"""
+    sugeridos, semanas_disponibles = _calcular_sugeridos(user_id)
+    return jsonify({
+        'items': sugeridos,
+        'total': len(sugeridos),
+        'semanas_disponibles': semanas_disponibles,
+        'semanas_requeridas': 4,
+    }), 200
+
+
+@app.route('/api/suggested-list', methods=['POST'])
+@token_required
+def create_suggested_list(user_id):
+    """Crea la lista 'Mercado Semanal' con los artículos recurrentes de las últimas 4 semanas"""
+    # Verificar si ya existe una lista "Mercado Semanal" creada en la semana ISO actual
+    hoy = datetime.utcnow()
+    inicio_semana_actual = hoy - timedelta(days=hoy.weekday())
+    fin_semana_actual = inicio_semana_actual + timedelta(weeks=1)
+
+    existente = ShoppingList.query.filter(
+        ShoppingList.user_id == user_id,
+        ShoppingList.name == 'Mercado Semanal',
+        ShoppingList.created_at >= inicio_semana_actual,
+        ShoppingList.created_at < fin_semana_actual,
+    ).first()
+
+    if existente:
+        return jsonify({'error': 'ya_existe', 'list_id': existente.id}), 409
+
+    sugeridos, semanas_disponibles = _calcular_sugeridos(user_id)
+    if not sugeridos:
+        return jsonify({'error': 'sin_sugeridos', 'semanas_disponibles': semanas_disponibles}), 422
+
+    lista = ShoppingList(user_id=user_id, name='Mercado Semanal')
+    db.session.add(lista)
+    db.session.flush()  # obtener lista.id antes de commit
+
+    for s in sugeridos:
+        item = ShoppingItem(
+            list_id=lista.id,
+            articulo=s['articulo'],
+            cantidad=s['cantidad'],
+            categoria=s['categoria'],
+        )
+        db.session.add(item)
+
+        # Upsert catálogo
+        catalog_entry = CatalogItem.query.filter_by(user_id=user_id, articulo=s['articulo']).first()
+        if not catalog_entry:
+            db.session.add(CatalogItem(user_id=user_id, articulo=s['articulo'], categoria=s['categoria']))
+
+    db.session.commit()
+    return jsonify({'list': lista.to_dict(), 'items_created': len(sugeridos)}), 201
 
 
 # ─────────────────────────────────────────────

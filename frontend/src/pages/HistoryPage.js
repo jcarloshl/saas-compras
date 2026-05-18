@@ -35,11 +35,16 @@ function formatDate(iso) {
   });
 }
 
+function formatMonto(val) {
+  return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function HistoryPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [period, setPeriod] = useState('all');
   const [items, setItems] = useState([]);
+  const [montoTotal, setMontoTotal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -51,6 +56,7 @@ export default function HistoryPage() {
     try {
       const res = await historyAPI.get(period);
       setItems(res.data.items);
+      setMontoTotal(res.data.monto_total_periodo ?? null);
     } catch {
       setError('No se pudo cargar el historial');
     } finally {
@@ -125,8 +131,15 @@ export default function HistoryPage() {
           </div>
         ) : (
           <>
-            <div className="alert alert-light border mb-3 py-2">
-              <strong>{items.length}</strong> artículo{items.length !== 1 ? 's' : ''} comprado{items.length !== 1 ? 's' : ''}
+            <div className="alert alert-light border mb-3 py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <span>
+                <strong>{items.length}</strong> artículo{items.length !== 1 ? 's' : ''} comprado{items.length !== 1 ? 's' : ''}
+              </span>
+              {montoTotal != null && (
+                <span className="fw-semibold text-success">
+                  💰 Total: ${formatMonto(montoTotal)}
+                </span>
+              )}
             </div>
 
             {categories.map(cat => (

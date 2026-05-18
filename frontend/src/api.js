@@ -78,6 +78,12 @@ export const historyAPI = {
   get: (period = 'all') => api.get(`/api/history?period=${period}`),
 };
 
+// Suggested weekly list API
+export const suggestedAPI = {
+  preview: () => api.get('/api/suggested-list'),
+  create:  () => api.post('/api/suggested-list'),
+};
+
 // Catalog API
 export const catalogAPI = {
   getAll: () => api.get('/api/catalog'),

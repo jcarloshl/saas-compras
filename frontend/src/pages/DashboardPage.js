@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { listsAPI } from '../api';
+import { listsAPI, suggestedAPI } from '../api';
 
 const CACHE_KEY = 'dashboard_lists';
 
@@ -117,6 +117,54 @@ export default function DashboardPage() {
     return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  // ── Mercado Semanal ──────────────────────────────────────────────────────
+  const isMonday = new Date().getDay() === 1;
+  const [showSuggestedModal, setShowSuggestedModal] = useState(false);
+  const [suggestedItems, setSuggestedItems] = useState([]);
+  const [suggestedMeta, setSuggestedMeta] = useState({ semanas_disponibles: 0, semanas_requeridas: 4 });
+  const [suggestedLoading, setSuggestedLoading] = useState(false);
+  const [suggestedCreating, setSuggestedCreating] = useState(false);
+
+  const CATEGORIA_COLORS = {
+    'Frutas y Verduras': 'success', 'Carnes y Pescados': 'danger',
+    'Lácteos y Huevos': 'warning', 'Panadería': 'warning',
+    'Almacén / Despensa': 'secondary', 'Bebidas': 'info',
+    'Limpieza del Hogar': 'primary', 'Higiene Personal': 'primary',
+    'Snacks y Dulces': 'warning', 'Congelados': 'info', 'Otros': 'secondary',
+  };
+
+  const handleOpenSuggested = async () => {
+    setShowSuggestedModal(true);
+    setSuggestedLoading(true);
+    setSuggestedItems([]);
+    try {
+      const res = await suggestedAPI.preview();
+      setSuggestedItems(res.data.items);
+      setSuggestedMeta({ semanas_disponibles: res.data.semanas_disponibles, semanas_requeridas: res.data.semanas_requeridas });
+    } catch {
+      setSuggestedMeta({ semanas_disponibles: 0, semanas_requeridas: 4 });
+    } finally {
+      setSuggestedLoading(false);
+    }
+  };
+
+  const handleCreateSuggested = async () => {
+    setSuggestedCreating(true);
+    try {
+      const res = await suggestedAPI.create();
+      setShowSuggestedModal(false);
+      navigate(`/lists/${res.data.list.id}`);
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setShowSuggestedModal(false);
+        navigate(`/lists/${err.response.data.list_id}`);
+      }
+    } finally {
+      setSuggestedCreating(false);
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
   return (
     <div>
       {/* Navbar */}
@@ -159,12 +207,22 @@ export default function DashboardPage() {
           <h5 className="fw-bold mb-0">
             {lists.length} {lists.length === 1 ? 'lista' : 'listas'}
           </h5>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowForm(!showForm)}
-          >
-            + Nueva lista
-          </button>
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-outline-success btn-sm"
+              onClick={handleOpenSuggested}
+              disabled={!isMonday}
+              title={isMonday ? 'Generar lista sugerida para esta semana' : 'Disponible los lunes'}
+            >
+              ✨ Mercado Semanal
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowForm(!showForm)}
+            >
+              + Nueva lista
+            </button>
+          </div>
         </div>
 
         {/* Form nueva lista */}
@@ -319,6 +377,89 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal Mercado Semanal ── */}
+      {showSuggestedModal && (
+        <div className="modal d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowSuggestedModal(false)}>
+          <div className="modal-dialog modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">✨ Mercado Semanal</h5>
+                <button className="btn-close" onClick={() => setShowSuggestedModal(false)} />
+              </div>
+              <div className="modal-body">
+                {suggestedLoading ? (
+                  <div className="text-center py-4">
+                    <div className="spinner-border text-success" />
+                    <p className="mt-2 text-muted small">Analizando historial...</p>
+                  </div>
+                ) : suggestedMeta.semanas_disponibles < suggestedMeta.semanas_requeridas ? (
+                  <div className="text-center py-3">
+                    <div style={{ fontSize: '2rem' }}>📅</div>
+                    <p className="mt-2 mb-1 fw-semibold">Historial insuficiente</p>
+                    <p className="text-muted small">
+                      Necesitás al menos <strong>4 semanas</strong> de compras registradas.<br />
+                      Tenés {suggestedMeta.semanas_disponibles} semana{suggestedMeta.semanas_disponibles !== 1 ? 's' : ''} hasta ahora.
+                    </p>
+                  </div>
+                ) : suggestedItems.length === 0 ? (
+                  <div className="text-center py-3">
+                    <div style={{ fontSize: '2rem' }}>🤔</div>
+                    <p className="mt-2 mb-1 fw-semibold">Sin artículos recurrentes</p>
+                    <p className="text-muted small">
+                      Todavía no hay artículos comprados las 4 semanas seguidas.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-muted small mb-3">
+                      {suggestedItems.length} artículo{suggestedItems.length !== 1 ? 's' : ''} comprados todas las semanas del último mes:
+                    </p>
+                    {Object.entries(
+                      suggestedItems.reduce((acc, item) => {
+                        const cat = item.categoria || 'Otros';
+                        if (!acc[cat]) acc[cat] = [];
+                        acc[cat].push(item);
+                        return acc;
+                      }, {})
+                    ).sort(([a], [b]) => a.localeCompare(b)).map(([cat, items]) => (
+                      <div key={cat} className="mb-3">
+                        <span className={`badge bg-${CATEGORIA_COLORS[cat] || 'secondary'} mb-1`}>{cat}</span>
+                        <ul className="list-group list-group-flush">
+                          {items.map((item, i) => (
+                            <li key={i} className="list-group-item py-1 px-2 d-flex justify-content-between align-items-center">
+                              <span>{item.articulo}</span>
+                              {item.cantidad && item.cantidad !== '1' && (
+                                <span className="text-muted small">× {item.cantidad}</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowSuggestedModal(false)}>
+                  Cancelar
+                </button>
+                {suggestedItems.length > 0 && !suggestedLoading && (
+                  <button
+                    className="btn btn-success btn-sm"
+                    onClick={handleCreateSuggested}
+                    disabled={suggestedCreating}
+                  >
+                    {suggestedCreating
+                      ? <><span className="spinner-border spinner-border-sm me-1" />Creando...</>
+                      : '✔ Crear lista'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
