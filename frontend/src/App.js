@@ -1,8 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
 import './App.css';
 
 // Páginas
@@ -19,7 +17,7 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="container mt-5 text-center">Cargando...</div>;
+    return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#F7F1E8',fontFamily:'Manrope,sans-serif',color:'#7A6A5C',fontSize:14}}>Cargando…</div>;
   }
 
   return user ? children : <Navigate to="/login" />;
@@ -29,7 +27,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <React.Suspense fallback={<div className="container mt-5 text-center">Cargando...</div>}>
+        <React.Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#F7F1E8',fontFamily:'Manrope,sans-serif',color:'#7A6A5C',fontSize:14}}>Cargando…</div>}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />

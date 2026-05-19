@@ -1,105 +1,40 @@
-/* ─── Global ─── */
+@keyframes cesta-spin {
+  to { transform: rotate(360deg); }
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
-  background-color: #f0f2f5;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  background: #F7F1E8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Navbar ─── */
-.navbar-brand {
-  font-weight: 700;
-  font-size: 1.3rem;
-}
-
-/* ─── Cards ─── */
-.card {
+button {
+  cursor: pointer;
   border: none;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.2s;
+  background: none;
+  font-family: inherit;
+  padding: 0;
 }
 
-.card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+input, select, textarea {
+  font-family: inherit;
+  outline: none;
 }
 
-/* ─── Auth card ─── */
-.auth-card {
-  max-width: 420px;
-  margin: 80px auto;
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 2.5px #C76A4D, 0 4px 14px rgba(199,106,77,0.12) !important;
 }
 
-.auth-card .card-body {
-  padding: 2rem;
+a {
+  text-decoration: none;
+  color: inherit;
 }
 
-/* ─── Stats badges ─── */
-.stats-bar {
-  background: #fff;
-  border-radius: 10px;
-  padding: 0.8rem 1.2rem;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  margin-bottom: 1rem;
-}
-
-/* ─── Item row ─── */
-.item-row {
-  border-radius: 8px;
-  transition: background 0.15s;
-}
-
-.item-row:hover {
-  background-color: #f8f9fa;
-}
-
-.item-row.comprado .item-name {
-  text-decoration: line-through;
-  color: #6c757d;
-}
-
-/* ─── Category badge ─── */
-.badge-categoria {
-  font-size: 0.72rem;
-  font-weight: 500;
-  padding: 3px 8px;
-  border-radius: 12px;
-}
-
-/* ─── Progress bar ─── */
-.progress {
-  height: 8px;
-  border-radius: 4px;
-}
-
-/* ─── Floating add button ─── */
-.btn-add-float {
-  position: fixed;
-  bottom: 28px;
-  right: 28px;
-  border-radius: 50%;
-  width: 56px;
-  height: 56px;
-  font-size: 1.6rem;
-  line-height: 1;
-  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
-  z-index: 100;
-}
-
-/* ─── Loader ─── */
-.spinner-center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
-}
-
-/* ─── Empty state ─── */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #6c757d;
-}
-
-.empty-state .empty-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1rem;
-}
+/* Thin scrollbar for horizontal scroll containers */
+.scroll-x::-webkit-scrollbar { height: 0; }
+.scroll-x { scrollbar-width: none; }
