@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
             Si tu email está registrado, recibirás un enlace. Revisá también la carpeta de spam.
           </div>
           <Link to="/login" style={{
-            display: 'block', marginTop: 14, height: 52, borderRadius: 14,
+            marginTop: 14, height: 52, borderRadius: 14,
             background: T.primary, color: '#fff',
             fontFamily: T.sans, fontSize: 15, fontWeight: 600,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
