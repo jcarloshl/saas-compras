@@ -93,7 +93,7 @@ export default function ListPage() {
 
     const rec = new SR();
     recognitionRef.current = rec;
-    rec.lang = 'es-AR';
+    rec.lang = 'es-CL';
     rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
