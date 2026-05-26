@@ -13,7 +13,7 @@ function loadCache() { try { return JSON.parse(sessionStorage.getItem(CACHE_KEY)
 function saveCache(data) { try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch {} }
 
 function catEmoji(name) { return CAT_META[name]?.emoji || '📦'; }
-function formatMonto(val) { return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function formatMonto(val) { return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function formatDate(iso) { return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }); }
 
 function greeting() {
@@ -58,7 +58,7 @@ export default function DashboardPage() {
     setCreating(true);
     try {
       const res = await listsAPI.create(name);
-      const updated = [...lists, res.data];
+      const updated = [res.data, ...lists];
       setLists(updated); saveCache(updated);
       setNewName(''); setShowForm(false);
     } catch { setError('Error al crear la lista'); } finally { setCreating(false); }
@@ -228,6 +228,17 @@ export default function DashboardPage() {
             <span style={{ fontFamily: T.serif, fontSize: 22, fontWeight: 500, letterSpacing: -0.4 }}>Listas activas</span>
             {!loading && <span style={{ fontSize: 12, color: T.muted, marginLeft: 8 }}>{lists.length}</span>}
           </div>
+          {!loading && lists.length > 0 && (
+            <button onClick={() => setShowForm(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: T.primary, color: '#fff', border: 'none',
+              borderRadius: 12, padding: '8px 14px', cursor: 'pointer',
+              fontFamily: T.sans, fontWeight: 600, fontSize: 13,
+            }}>
+              <Ico.Plus s={15} c="#fff" w={2.4}/>
+              Nueva
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -315,25 +326,6 @@ export default function DashboardPage() {
                 </button>
               );
             })}
-
-            {/* Nueva lista — card dashed */}
-            <button
-              onClick={() => setShowForm(true)}
-              style={{
-                border: `1.5px dashed ${T.hairline}`,
-                borderRadius: 20, padding: '18px 16px',
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: 'transparent', cursor: 'pointer', width: '100%',
-              }}
-            >
-              <div style={{
-                width: 36, height: 36, borderRadius: 10, border: `1.5px dashed ${T.hairline}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Ico.Plus s={18} c={T.muted} w={2}/>
-              </div>
-              <span style={{ fontSize: 14, color: T.muted, fontWeight: 500 }}>Nueva lista</span>
-            </button>
           </div>
         )}
       </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { listsAPI, itemsAPI } from '../api';
+import { listsAPI, itemsAPI, catalogAPI } from '../api';
 import { CATEGORIAS, CAT_META, Ico, Spinner } from '../theme';
 import AAvatar from '../components/ui/AAvatar';
 
@@ -44,7 +44,11 @@ export default function ListPage() {
   const [filterCat, setFilterCat] = useState('Todas');
   const [showToast, setShowToast] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceToast, setVoiceToast] = useState('');
   const recognitionRef = useRef(null);
+  const voiceModeRef = useRef(false);
+  const submitByVoiceRef = useRef(null);
   const hasSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   const fetchData = useCallback(async () => {
@@ -62,7 +66,7 @@ export default function ListPage() {
       setListInfo(listRes.data);
     } catch {}
     try {
-      const catalogRes = await itemsAPI.getCatalog(id);
+      const catalogRes = await catalogAPI.getAll();
       setCatalog(catalogRes.data);
     } catch {}
   }, [id]);
@@ -102,9 +106,14 @@ export default function ListPage() {
       const last = e.results[e.results.length - 1];
       const text = last[0].transcript.trim();
       handleArticuloChange(text);
-      if (last.isFinal) setIsListening(false);
+      if (last.isFinal) {
+        setIsListening(false);
+        if (voiceModeRef.current) {
+          submitByVoiceRef.current?.(text);
+        }
+      }
     };
-    rec.onerror = () => setIsListening(false);
+    rec.onerror = () => { setIsListening(false); if (voiceModeRef.current) startListening(); };
     rec.onend = () => setIsListening(false);
 
     setIsListening(true);
@@ -119,6 +128,9 @@ export default function ListPage() {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!form.articulo.trim()) return;
+    stopListening();
+    voiceModeRef.current = false;
+    setVoiceMode(false);
     setAdding(true);
     try {
       const res = await itemsAPI.add(id, form.articulo.trim(), form.cantidad, form.categoria, form.agregado_por);
@@ -141,6 +153,36 @@ export default function ListPage() {
       setAdding(false);
     }
   };
+
+  const submitByVoice = useCallback(async (text) => {
+    if (!text.trim()) {
+      if (voiceModeRef.current) startListening();
+      return;
+    }
+    try {
+      const res = await itemsAPI.add(id, text.trim(), '1', form.categoria || 'Otros', form.agregado_por);
+      setItems(prev => [...prev, res.data]);
+      setStats(prev => {
+        const total = prev.total + 1;
+        return { total, pendientes: prev.pendientes + 1, comprados: prev.comprados, porcentaje: total > 0 ? Math.round(prev.comprados / total * 100) : 0 };
+      });
+      const art = text.trim();
+      setCatalog(prev => {
+        if (prev.some(c => c.articulo.toLowerCase() === art.toLowerCase())) return prev;
+        return [...prev, { articulo: art, categoria: form.categoria || 'Otros' }]
+          .sort((a, b) => a.articulo.toLowerCase().localeCompare(b.articulo.toLowerCase()));
+      });
+      setForm(f => ({ ...f, articulo: '' }));
+      setSuggestions([]);
+      setVoiceToast(art);
+      setTimeout(() => setVoiceToast(''), 2000);
+    } catch {
+      setError('Error al agregar por voz');
+    }
+    if (voiceModeRef.current) startListening();
+  }, [id, form.categoria, form.agregado_por, startListening]);
+
+  useEffect(() => { submitByVoiceRef.current = submitByVoice; }, [submitByVoice]);
 
   const handleToggle = async (item) => {
     const prevItems = items;
@@ -415,7 +457,7 @@ export default function ListPage() {
           </button>
           {/* Botón mic — abre formulario Y activa reconocimiento de voz */}
           <button
-            onClick={() => { setShowForm(true); if (hasSpeech) startListening(); }}
+            onClick={() => { setShowForm(true); if (hasSpeech) { voiceModeRef.current = true; setVoiceMode(true); startListening(); } }}
             style={{
               width: 40, height: 40, borderRadius: 14,
               background: isListening ? T.mustard : T.primary,
@@ -435,7 +477,7 @@ export default function ListPage() {
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
           <div
             style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
-            onClick={() => { stopListening(); setShowForm(false); setSuggestions([]); }}
+            onClick={() => { stopListening(); voiceModeRef.current = false; setVoiceMode(false); setShowForm(false); setSuggestions([]); }}
           />
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -447,10 +489,41 @@ export default function ListPage() {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               <div style={{ width: 40, height: 5, borderRadius: 99, background: T.hairline }}/>
             </div>
+            {voiceMode && (
+              <div style={{
+                margin: '0 16px 12px',
+                background: T.primary + '18',
+                borderRadius: 12, padding: '10px 14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>{isListening ? '🔴' : '⏳'}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: T.primary }}>
+                      {isListening ? 'Escuchando…' : 'Procesando…'}
+                    </div>
+                    {voiceToast && (
+                      <div style={{ fontSize: 11.5, color: T.muted }}>✓ {voiceToast} agregado</div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { voiceModeRef.current = false; setVoiceMode(false); stopListening(); }}
+                  style={{
+                    padding: '5px 12px', borderRadius: 99, border: `1px solid ${T.primary}`,
+                    background: 'transparent', color: T.primary, fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: T.sans,
+                  }}
+                >
+                  Detener
+                </button>
+              </div>
+            )}
             <div style={{ padding: '0 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: T.serif, fontWeight: 500, fontSize: 19, letterSpacing: -0.3, color: T.ink }}>Añadir producto</span>
               <button
-                onClick={() => { stopListening(); setShowForm(false); setSuggestions([]); }}
+                onClick={() => { stopListening(); voiceModeRef.current = false; setVoiceMode(false); setShowForm(false); setSuggestions([]); }}
                 style={{ width: 32, height: 32, borderRadius: '50%', background: T.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.elev, border: 'none', cursor: 'pointer' }}
               >
                 <Ico.X s={14} c={T.ink}/>
