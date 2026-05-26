@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: compras
+      POSTGRES_PASSWORD: compras_pass
+      POSTGRES_DB: compras
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: change-me
+      DATABASE_URL: postgresql://compras:compras_pass@db:5432/compras
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - '5000:5000'
+    depends_on:
+      - db
+    volumes:
+      - ./backend/instance:/app/instance
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: /api
+    restart: unless-stopped
+    ports:
+      - '3000:80'
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

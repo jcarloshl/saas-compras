@@ -91,4 +91,10 @@ export const catalogAPI = {
   delete: (id) => api.delete(`/api/catalog/${id}`),
 };
 
+// Stats API
+export const statsAPI = {
+  getArticulo: (nombre) =>
+    api.get(`/api/stats/articulo?nombre=${encodeURIComponent(nombre)}`),
+};
+
 export default api;

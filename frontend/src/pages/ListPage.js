@@ -1,19 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { listsAPI, itemsAPI } from '../api';
-import { T, CATEGORIAS, CAT_META, Ico, Spinner } from '../theme';
+import { CATEGORIAS, CAT_META, Ico, Spinner } from '../theme';
+import AAvatar from '../components/ui/AAvatar';
 
-const inp = {
-  width: '100%', background: T.paper, borderRadius: 12,
-  padding: '12px 14px', fontSize: 15, color: T.ink,
-  boxShadow: T.elev, border: 'none', fontFamily: T.sans,
-};
+const AVATAR_COLORS = ['#C76A4D', '#6B7A4D', '#D9A04A', '#8E5B8C', '#5A8FA8', '#7A6A5C'];
+const avatarColor = (name) => name ? AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length] : AVATAR_COLORS[0];
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function formatMonto(val) {
+  return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function ListPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { T } = useTheme();
+
+  const inp = {
+    width: '100%', background: T.paper, borderRadius: 12,
+    padding: '12px 14px', fontSize: 15, color: T.ink,
+    boxShadow: T.elev, border: 'none', fontFamily: T.sans,
+    boxSizing: 'border-box',
+  };
 
   const [listInfo, setListInfo] = useState(null);
   const [items, setItems] = useState([]);
@@ -95,6 +109,8 @@ export default function ListPage() {
   };
 
   const handleToggle = async (item) => {
+    const prevItems = items;
+    const prevStats = stats;
     const newVal = !item.comprado;
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, comprado: newVal } : i));
     setStats(prev => {
@@ -109,7 +125,8 @@ export default function ListPage() {
     try {
       await itemsAPI.update(id, item.id, { comprado: newVal });
     } catch {
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, comprado: item.comprado } : i));
+      setItems(prevItems);
+      setStats(prevStats);
     }
   };
 
@@ -155,7 +172,7 @@ export default function ListPage() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: T.cream, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Spinner size={32} />
+        <Spinner size={32}/>
       </div>
     );
   }
@@ -165,32 +182,63 @@ export default function ListPage() {
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ padding: '56px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '52px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <button onClick={() => navigate('/dashboard')} style={{
-            width: 40, height: 40, borderRadius: 12, background: T.paper,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.elev,
+            width: 40, height: 40, borderRadius: 12, background: T.paper, border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.elev, cursor: 'pointer',
           }}>
-            <Ico.ChevL s={18} c={T.ink} />
+            <Ico.ChevL s={18} c={T.ink}/>
           </button>
-          <button onClick={handleReset} style={{
-            padding: '0 14px', height: 36, borderRadius: 10,
-            background: 'transparent', border: `1px solid ${T.hairline}`,
-            fontSize: 12.5, fontWeight: 600, color: T.muted, fontFamily: T.sans,
-          }}>Vaciar</button>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleReset} style={{
+              padding: '0 14px', height: 36, borderRadius: 10,
+              background: 'transparent', border: `1px solid ${T.hairline}`,
+              fontSize: 12.5, fontWeight: 600, color: T.muted, fontFamily: T.sans, cursor: 'pointer',
+            }}>Vaciar</button>
+            <button onClick={() => navigate(`/lists/${id}/shop`)} style={{
+              padding: '0 16px', height: 36, borderRadius: 10,
+              background: T.primary, color: '#fff', border: 'none',
+              fontSize: 13, fontWeight: 700, fontFamily: T.sans, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Ico.Check s={14} c="#fff" w={2.5}/>
+              Comprar
+            </button>
+          </div>
         </div>
 
-        {/* Title + progress */}
-        <div style={{ padding: '18px 24px 0' }}>
+        {/* Title + subtitle + monto */}
+        <div style={{ padding: '16px 24px 0' }}>
           <h1 style={{ margin: 0, fontFamily: T.serif, fontWeight: 500, fontSize: 30, letterSpacing: -0.6 }}>
             {listInfo?.name || 'Lista'}
           </h1>
+          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {listInfo?.created_at && (
+              <span style={{ fontSize: 12, color: T.muted }}>
+                {formatDate(listInfo.created_at)}
+              </span>
+            )}
+            {listInfo?.monto_total != null && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', borderRadius: 99,
+                background: T.paperHi, color: T.olive,
+                fontSize: 12, fontWeight: 600,
+              }}>
+                💰 ${formatMonto(listInfo.monto_total)} registrado
+              </span>
+            )}
+          </div>
+
+          {/* Progress bar */}
           {stats.total > 0 && (
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ flex: 1, height: 8, background: T.hairline, borderRadius: 99 }}>
                 <div style={{
                   width: `${Math.max(2, stats.porcentaje)}%`, height: '100%',
-                  background: T.primary, borderRadius: 99, transition: 'width .3s',
-                }} />
+                  background: stats.pendientes === 0 ? T.olive : T.primary, borderRadius: 99, transition: 'width .3s',
+                }}/>
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>
                 {stats.comprados}<span style={{ color: T.muted, fontWeight: 500 }}>/{stats.total}</span>
@@ -206,7 +254,7 @@ export default function ListPage() {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             {error}
-            <button onClick={() => setError('')} style={{ fontSize: 18, color: '#B91C1C', lineHeight: 1, fontFamily: T.sans }}>×</button>
+            <button onClick={() => setError('')}><Ico.X s={16} c="#B91C1C"/></button>
           </div>
         )}
 
@@ -221,7 +269,7 @@ export default function ListPage() {
                 background: active ? T.ink : T.paper,
                 color: active ? '#fff' : T.muted,
                 fontSize: 12.5, fontWeight: 600, fontFamily: T.sans,
-                boxShadow: active ? 'none' : T.elev,
+                boxShadow: active ? 'none' : T.elev, border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}>
                 {meta && <span style={{ fontSize: 13 }}>{meta.emoji}</span>}
@@ -236,7 +284,7 @@ export default function ListPage() {
           {filteredItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 24px' }}>
               <div style={{ fontSize: 52, marginBottom: 12, opacity: 0.5 }}>🥬🍞🥚</div>
-              <h2 style={{ margin: 0, fontFamily: T.serif, fontSize: 22, fontWeight: 500 }}>
+              <h2 style={{ margin: 0, fontFamily: T.serif, fontSize: 22, fontWeight: 500, color: T.ink }}>
                 {filterCat === 'Todas' ? 'Lista vacía' : `Sin artículos en ${filterCat}`}
               </h2>
               <p style={{ margin: '8px 0 0', fontSize: 13.5, color: T.muted, lineHeight: 1.5 }}>
@@ -250,15 +298,12 @@ export default function ListPage() {
               const meta = CAT_META[cat] || { emoji: '📦', color: T.muted };
               return (
                 <div key={cat} style={{ marginTop: gi === 0 ? 0 : 22 }}>
+                  {/* Categoría header — uppercase */}
                   <div style={{ padding: '0 8px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{
-                      padding: '3px 9px', borderRadius: 99, background: '#F1E5D2',
-                      fontSize: 11, fontWeight: 600, color: T.ink,
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                    }}>
-                      <span>{meta.emoji}</span>{cat}
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.2, textTransform: 'uppercase', color: T.muted }}>
+                      {meta.emoji} {cat}
                     </span>
-                    <span style={{ fontSize: 11, color: T.muted, fontWeight: 500 }}>{catItems.length}</span>
+                    <span style={{ fontSize: 11, color: T.faint || T.muted, fontWeight: 500 }}>{catItems.length}</span>
                   </div>
                   <div style={{ background: T.paper, borderRadius: 20, overflow: 'hidden', boxShadow: T.elev }}>
                     {catItems.map((item, idx) => (
@@ -267,36 +312,48 @@ export default function ListPage() {
                         padding: '14px 16px',
                         borderTop: idx === 0 ? 'none' : `1px solid ${T.hairline}`,
                       }}>
+                        {/* Checkbox */}
                         <button onClick={() => handleToggle(item)} style={{
                           width: 24, height: 24, borderRadius: 8, flexShrink: 0,
                           background: item.comprado ? T.primary : 'transparent',
                           border: item.comprado ? `1.5px solid ${T.primary}` : `1.5px solid rgba(42,31,24,0.2)`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer',
                         }}>
-                          {item.comprado && <Ico.Check s={14} c="#fff" />}
+                          {item.comprado && <Ico.Check s={14} c="#fff"/>}
                         </button>
+
+                        {/* Name + qty */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
-                            fontSize: 15, fontWeight: 500,
+                            fontSize: 15, fontWeight: 500, color: T.ink,
                             textDecoration: item.comprado ? 'line-through' : 'none',
                             opacity: item.comprado ? 0.45 : 1,
                           }}>{item.articulo}</div>
-                          {(item.cantidad && item.cantidad !== '1') || item.agregado_por ? (
-                            <div style={{ marginTop: 2, fontSize: 12, color: T.muted, display: 'flex', alignItems: 'center', gap: 5, opacity: item.comprado ? 0.5 : 1 }}>
-                              {item.cantidad && item.cantidad !== '1' && <span>× {item.cantidad}</span>}
-                              {item.cantidad && item.cantidad !== '1' && item.agregado_por && (
-                                <span style={{ width: 3, height: 3, borderRadius: '50%', background: T.muted, flexShrink: 0 }} />
-                              )}
-                              {item.agregado_por && <span>{item.agregado_por}</span>}
+                          {(item.cantidad && item.cantidad !== '1') ? (
+                            <div style={{ marginTop: 2, fontSize: 12, color: T.muted, opacity: item.comprado ? 0.5 : 1 }}>
+                              × {item.cantidad}
                             </div>
                           ) : null}
                         </div>
+
+                        {/* Avatar de quien añadió (solo si no comprado) */}
+                        {!item.comprado && item.agregado_por && (
+                          <AAvatar
+                            initials={item.agregado_por[0].toUpperCase()}
+                            color={avatarColor(item.agregado_por)}
+                            size={26}
+                            T={T}
+                          />
+                        )}
+
+                        {/* Delete */}
                         <button onClick={() => handleDelete(item.id)} style={{
                           width: 30, height: 30, borderRadius: 8, flexShrink: 0,
                           background: 'transparent', border: `1px solid ${T.hairline}`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                         }}>
-                          <Ico.Trash s={14} c={T.muted} />
+                          <Ico.Trash s={14} c={T.muted}/>
                         </button>
                       </div>
                     ))}
@@ -308,16 +365,15 @@ export default function ListPage() {
         </div>
       </div>
 
-      {/* Floating add bar */}
+      {/* Floating add bar — Mic icon */}
       <div style={{ position: 'fixed', bottom: 24, left: 0, right: 0, zIndex: 10, padding: '0 16px' }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
           <button onClick={() => setShowForm(true)} style={{
             width: '100%', background: T.ink, borderRadius: 24,
-            padding: '10px 10px 10px 20px',
+            padding: '10px 10px 10px 20px', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 10,
             boxShadow: T.elevHi, fontFamily: T.sans,
           }}>
-            <Ico.Plus s={18} c="rgba(255,255,255,0.5)" w={2.2} />
             <span style={{ flex: 1, color: 'rgba(255,255,255,0.5)', fontSize: 14.5, textAlign: 'left' }}>
               Añadir producto…
             </span>
@@ -325,7 +381,7 @@ export default function ListPage() {
               width: 40, height: 40, borderRadius: 14, background: T.primary,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <Ico.Plus s={18} c="#fff" w={2.2} />
+              <Ico.Mic s={18} c="#fff" w={2}/>
             </div>
           </button>
         </div>
@@ -343,33 +399,27 @@ export default function ListPage() {
             background: T.cream, borderRadius: '24px 24px 0 0',
             padding: '14px 0 40px',
             boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+            maxWidth: 480, margin: '0 auto',
           }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <div style={{ width: 40, height: 5, borderRadius: 99, background: T.hairline }} />
+              <div style={{ width: 40, height: 5, borderRadius: 99, background: T.hairline }}/>
             </div>
             <div style={{ padding: '0 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: T.serif, fontWeight: 500, fontSize: 19, letterSpacing: -0.3 }}>Añadir producto</span>
+              <span style={{ fontFamily: T.serif, fontWeight: 500, fontSize: 19, letterSpacing: -0.3, color: T.ink }}>Añadir producto</span>
               <button
                 onClick={() => { setShowForm(false); setSuggestions([]); }}
-                style={{
-                  width: 32, height: 32, borderRadius: '50%', background: T.paper,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.elev,
-                }}
+                style={{ width: 32, height: 32, borderRadius: '50%', background: T.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.elev, border: 'none', cursor: 'pointer' }}
               >
-                <Ico.X s={14} c={T.ink} />
+                <Ico.X s={14} c={T.ink}/>
               </button>
             </div>
             <form onSubmit={handleAdd} style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ position: 'relative' }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Artículo *</label>
                 <input
-                  type="text"
-                  style={inp}
-                  placeholder="¿Qué necesitás?"
-                  value={form.articulo}
-                  onChange={e => handleArticuloChange(e.target.value)}
-                  autoFocus
-                  required
+                  type="text" style={inp} placeholder="¿Qué necesitás?"
+                  value={form.articulo} onChange={e => handleArticuloChange(e.target.value)}
+                  autoFocus required
                 />
                 {suggestions.length > 0 && (
                   <div style={{
@@ -378,18 +428,14 @@ export default function ListPage() {
                     overflow: 'hidden', marginBottom: 4,
                   }}>
                     {suggestions.map((s, i) => (
-                      <div
-                        key={i}
-                        onMouseDown={() => selectSuggestion(s)}
-                        style={{
-                          padding: '11px 14px', cursor: 'pointer',
-                          borderTop: i === 0 ? 'none' : `1px solid ${T.hairline}`,
-                          display: 'flex', alignItems: 'center', gap: 10,
-                        }}
-                      >
+                      <div key={i} onMouseDown={() => selectSuggestion(s)} style={{
+                        padding: '11px 14px', cursor: 'pointer',
+                        borderTop: i === 0 ? 'none' : `1px solid ${T.hairline}`,
+                        display: 'flex', alignItems: 'center', gap: 10,
+                      }}>
                         <span style={{ fontSize: 18 }}>{CAT_META[s.categoria]?.emoji || '📦'}</span>
                         <div>
-                          <div style={{ fontSize: 14, fontWeight: 500 }}>{s.articulo}</div>
+                          <div style={{ fontSize: 14, fontWeight: 500, color: T.ink }}>{s.articulo}</div>
                           <div style={{ fontSize: 11, color: T.muted }}>{s.categoria}</div>
                         </div>
                       </div>
@@ -401,20 +447,11 @@ export default function ListPage() {
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: '0 0 80px' }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Cantidad</label>
-                  <input
-                    type="text"
-                    style={{ ...inp, textAlign: 'center' }}
-                    value={form.cantidad}
-                    onChange={e => setForm(f => ({ ...f, cantidad: e.target.value }))}
-                  />
+                  <input type="text" style={{ ...inp, textAlign: 'center' }} value={form.cantidad} onChange={e => setForm(f => ({ ...f, cantidad: e.target.value }))}/>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Categoría</label>
-                  <select
-                    style={{ ...inp, paddingRight: 8 }}
-                    value={form.categoria}
-                    onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-                  >
+                  <select style={{ ...inp, paddingRight: 8 }} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
                     {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -422,23 +459,16 @@ export default function ListPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Quién lo agrega</label>
-                <input
-                  type="text"
-                  style={inp}
-                  placeholder="Tu nombre"
-                  value={form.agregado_por}
-                  onChange={e => setForm(f => ({ ...f, agregado_por: e.target.value }))}
-                />
+                <input type="text" style={inp} placeholder="Tu nombre" value={form.agregado_por} onChange={e => setForm(f => ({ ...f, agregado_por: e.target.value }))}/>
               </div>
 
               <button type="submit" disabled={adding} style={{
                 height: 52, borderRadius: 14, background: T.primary, color: '#fff',
-                fontFamily: T.sans, fontSize: 15, fontWeight: 600,
+                fontFamily: T.sans, fontSize: 15, fontWeight: 600, border: 'none', cursor: 'pointer',
                 opacity: adding ? 0.7 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                marginTop: 4,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4,
               }}>
-                {adding && <Spinner size={18} color="#fff" />}
+                {adding && <Spinner size={18} color="#fff"/>}
                 Agregar artículo
               </button>
             </form>
@@ -453,8 +483,7 @@ export default function ListPage() {
           zIndex: 100, background: T.ink, color: '#fff', borderRadius: 20,
           padding: '14px 24px', boxShadow: T.elevHi,
           display: 'flex', alignItems: 'center', gap: 10,
-          fontFamily: T.sans, fontSize: 14.5, fontWeight: 600,
-          whiteSpace: 'nowrap',
+          fontFamily: T.sans, fontSize: 14.5, fontWeight: 600, whiteSpace: 'nowrap',
         }}>
           <span style={{ fontSize: 22 }}>🎉</span>
           ¡Compras listas!

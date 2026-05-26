@@ -1,0 +1,29 @@
+version: '3.9'
+
+services:
+  db:
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  backend:
+    environment:
+      SECRET_KEY: change-me-super-secret
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - '5000:5000'
+    volumes:
+      - ./backend/instance:/app/instance
+      - ./backend:/app
+
+  frontend:
+    ports:
+      - '3000:80'
+    build:
+      args:
+        REACT_APP_API_URL: /api
+    volumes:
+      - ./frontend:/app
+
+volumes:
+  db_data:
+    driver: local

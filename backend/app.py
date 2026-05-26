@@ -673,6 +673,52 @@ def create_suggested_list(user_id):
 #  HEALTH CHECK & ERROR HANDLERS
 # ─────────────────────────────────────────────
 
+@app.route('/api/stats/articulo', methods=['GET'])
+@token_required
+def get_articulo_stats(user_id):
+    nombre = request.args.get('nombre', '').strip()
+    if not nombre:
+        return jsonify({'error': 'nombre requerido'}), 400
+
+    todos = PurchaseHistory.query.filter_by(user_id=user_id).all()
+    # Filtrado en Python: evita diferencias de collation SQLite/Postgres
+    # TODO futuro: añadir columna articulo_lower indexada para escalar
+    registros = [r for r in todos if r.articulo.lower() == nombre.lower()]
+
+    if not registros:
+        return jsonify({
+            'articulo': nombre, 'total_veces': 0, 'veces_este_anio': 0,
+            'ultima_compra': None, 'dias_desde_ultima': None,
+            'quien_anade_mas': [], 'categoria_mas_frecuente': 'Otros',
+            'semanas_distintas': 0,
+        })
+
+    registros.sort(key=lambda r: r.fecha_compra, reverse=True)
+    ultima      = registros[0].fecha_compra
+    anio_actual = datetime.utcnow().year
+
+    from collections import Counter
+    cat_counter = Counter(r.categoria for r in registros)
+    who_counter = Counter(r.agregado_por for r in registros if r.agregado_por)
+    total       = len(registros)
+    veces_anio  = sum(1 for r in registros if r.fecha_compra.year == anio_actual)
+    # Denominador = total compras del artículo (incluye entradas sin agregado_por).
+    quien       = [{'nombre': k, 'count': v, 'porcentaje': round(v / total * 100)}
+                   for k, v in who_counter.most_common(5)]
+    semanas     = {r.fecha_compra.isocalendar()[:2] for r in registros}
+
+    return jsonify({
+        'articulo':                registros[0].articulo,
+        'total_veces':             total,
+        'veces_este_anio':         veces_anio,
+        'ultima_compra':           ultima.isoformat(),
+        'dias_desde_ultima':       (datetime.utcnow() - ultima).days,
+        'categoria_mas_frecuente': cat_counter.most_common(1)[0][0],
+        'semanas_distintas':       len(semanas),
+        'quien_anade_mas':         quien,
+    })
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { historyAPI } from '../api';
-import { T, CAT_META, Ico, Spinner } from '../theme';
+import { CAT_META, Ico, Spinner } from '../theme';
+import { useTheme } from '../contexts/ThemeContext';
+import BottomTabBar from '../components/BottomTabBar';
 
 function getPeriodOptions() {
   const options = [{ value: 'all', label: 'Todo el historial' }];
@@ -24,6 +26,7 @@ function formatMonto(val) {
 }
 
 export default function HistoryPage() {
+  const { T } = useTheme();
   const navigate = useNavigate();
   const [period, setPeriod] = useState('all');
   const [items, setItems] = useState([]);
@@ -56,30 +59,29 @@ export default function HistoryPage() {
   }, {});
   const categories = Object.keys(byCategory).sort();
 
+  const inp = {
+    flex: 1, border: 'none', background: 'transparent',
+    fontSize: 14, fontWeight: 600, color: T.ink, fontFamily: T.sans, padding: 0,
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: T.cream, fontFamily: T.sans, color: T.ink, paddingBottom: 60 }}>
+    <div style={{
+      minHeight: '100vh', background: T.cream, fontFamily: T.sans, color: T.ink,
+      paddingBottom: 120,
+    }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center' }}>
-          <button onClick={() => navigate('/dashboard')} style={{
-            padding: '0 14px 0 10px', height: 40, borderRadius: 12, background: T.paper,
-            display: 'flex', alignItems: 'center', gap: 6, boxShadow: T.elev,
-            fontSize: 13, fontWeight: 600, color: T.ink, fontFamily: T.sans,
-          }}>
-            <Ico.ChevL s={16} c={T.ink} /> Listas
-          </button>
-        </div>
-
-        {/* Title */}
-        <div style={{ padding: '18px 24px 0' }}>
-          <div style={{ fontSize: 13, color: T.muted, fontWeight: 500 }}>Historial</div>
-          <h1 style={{ margin: '2px 0 0', fontFamily: T.serif, fontWeight: 500, fontSize: 30, letterSpacing: -0.6 }}>
+        <div style={{ padding: '52px 20px 0' }}>
+          <div style={{ fontSize: 13, color: T.muted, fontWeight: 500, marginBottom: 4 }}>
+            Historial
+          </div>
+          <h1 style={{ margin: 0, fontFamily: T.serif, fontWeight: 500, fontSize: 30, letterSpacing: -0.6 }}>
             Lo que compraste
           </h1>
         </div>
 
-        {/* Period selector */}
+        {/* Period selector inline */}
         <div style={{ padding: '16px 20px 0' }}>
           <div style={{
             background: T.paper, borderRadius: 14, padding: '12px 14px',
@@ -89,12 +91,11 @@ export default function HistoryPage() {
             <select
               value={period}
               onChange={e => setPeriod(e.target.value)}
-              style={{
-                flex: 1, border: 'none', background: 'transparent',
-                fontSize: 14, fontWeight: 600, color: T.ink, fontFamily: T.sans, padding: 0,
-              }}
+              style={inp}
             >
-              {periodOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              {periodOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
             <Ico.ChevR s={14} c={T.muted} w={2} />
           </div>
@@ -104,8 +105,10 @@ export default function HistoryPage() {
           <div style={{
             margin: '14px 20px 0', background: '#FEE2E2', border: '1px solid #FECACA',
             color: '#B91C1C', borderRadius: 10, padding: '10px 14px', fontSize: 13.5,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             {error}
+            <button onClick={() => setError('')} style={{ fontSize: 18, color: '#B91C1C' }}>×</button>
           </div>
         )}
 
@@ -125,6 +128,38 @@ export default function HistoryPage() {
           </div>
         ) : (
           <>
+            {/* Monthly spend card → /budget */}
+            {montoTotal != null && montoTotal > 0 && (
+              <div style={{ padding: '14px 20px 0' }}>
+                <button
+                  onClick={() => navigate('/budget')}
+                  style={{
+                    width: '100%', background: T.paper, borderRadius: 18,
+                    padding: '16px 18px', boxShadow: T.elev,
+                    border: `1px solid ${T.hairline}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    cursor: 'pointer', fontFamily: T.sans, textAlign: 'left',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>
+                      Gasto registrado
+                    </div>
+                    <div style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 400, color: T.olive, letterSpacing: -0.5 }}>
+                      ${formatMonto(montoTotal)}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
+                      Ver presupuesto
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <span style={{ fontSize: 32 }}>💰</span>
+                    <Ico.ChevR s={14} c={T.muted} w={2} />
+                  </div>
+                </button>
+              </div>
+            )}
+
             {/* Summary strip */}
             <div style={{ padding: '14px 20px 0' }}>
               <div style={{
@@ -136,13 +171,8 @@ export default function HistoryPage() {
                   <strong style={{ color: T.ink, fontWeight: 700 }}>{items.length}</strong>{' '}
                   artículo{items.length !== 1 ? 's' : ''} comprado{items.length !== 1 ? 's' : ''}
                 </div>
-                {montoTotal != null && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 16 }}>💰</span>
-                    <span style={{ fontFamily: T.serif, fontWeight: 600, fontSize: 18, color: T.olive, letterSpacing: -0.3 }}>
-                      ${formatMonto(montoTotal)}
-                    </span>
-                  </div>
+                {montoTotal == null && (
+                  <div style={{ fontSize: 12, color: T.muted, fontStyle: 'italic' }}>Sin monto</div>
                 )}
               </div>
             </div>
@@ -197,6 +227,8 @@ export default function HistoryPage() {
           </>
         )}
       </div>
+
+      <BottomTabBar active="hist" />
     </div>
   );
 }

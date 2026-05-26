@@ -1,11 +1,11 @@
 {
-  "name": "Lista de Compras",
-  "short_name": "Compras",
+  "name": "Cesta",
+  "short_name": "Cesta",
   "description": "Tu lista de compras familiar",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#059669",
-  "theme_color": "#059669",
+  "background_color": "#C76A4D",
+  "theme_color": "#C76A4D",
   "orientation": "portrait",
   "icons": [
     {
