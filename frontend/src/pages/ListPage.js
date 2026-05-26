@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -43,6 +43,9 @@ export default function ListPage() {
 
   const [filterCat, setFilterCat] = useState('Todas');
   const [showToast, setShowToast] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const hasSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   const fetchData = useCallback(async () => {
     try {
@@ -66,7 +69,7 @@ export default function ListPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleArticuloChange = (value) => {
+  const handleArticuloChange = useCallback((value) => {
     setForm(f => ({ ...f, articulo: value }));
     if (value.length >= 2) {
       setSuggestions(
@@ -75,7 +78,38 @@ export default function ListPage() {
     } else {
       setSuggestions([]);
     }
-  };
+  }, [catalog]);
+
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setIsListening(false);
+  }, []);
+
+  const startListening = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    if (recognitionRef.current) { recognitionRef.current.stop(); }
+
+    const rec = new SR();
+    recognitionRef.current = rec;
+    rec.lang = 'es-AR';
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+
+    rec.onresult = (e) => {
+      const last = e.results[e.results.length - 1];
+      const text = last[0].transcript.trim();
+      handleArticuloChange(text);
+      if (last.isFinal) setIsListening(false);
+    };
+    rec.onerror = () => setIsListening(false);
+    rec.onend = () => setIsListening(false);
+
+    setIsListening(true);
+    rec.start();
+  }, [handleArticuloChange]);
 
   const selectSuggestion = (item) => {
     setForm(f => ({ ...f, articulo: item.articulo, categoria: item.categoria }));
@@ -365,24 +399,33 @@ export default function ListPage() {
         </div>
       </div>
 
-      {/* Floating add bar — Mic icon */}
+      {/* Floating add bar */}
       <div style={{ position: 'fixed', bottom: 24, left: 0, right: 0, zIndex: 10, padding: '0 16px' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          <button onClick={() => setShowForm(true)} style={{
-            width: '100%', background: T.ink, borderRadius: 24,
-            padding: '10px 10px 10px 20px', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 10,
-            boxShadow: T.elevHi, fontFamily: T.sans,
-          }}>
-            <span style={{ flex: 1, color: 'rgba(255,255,255,0.5)', fontSize: 14.5, textAlign: 'left' }}>
-              Añadir producto…
-            </span>
-            <div style={{
-              width: 40, height: 40, borderRadius: 14, background: T.primary,
+        <div style={{
+          maxWidth: 480, margin: '0 auto',
+          background: T.ink, borderRadius: 24, padding: '10px 10px 10px 20px',
+          boxShadow: T.elevHi, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          {/* Área de texto — abre formulario sin mic */}
+          <button
+            onClick={() => setShowForm(true)}
+            style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+          >
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14.5 }}>Añadir producto…</span>
+          </button>
+          {/* Botón mic — abre formulario Y activa reconocimiento de voz */}
+          <button
+            onClick={() => { setShowForm(true); if (hasSpeech) startListening(); }}
+            style={{
+              width: 40, height: 40, borderRadius: 14,
+              background: isListening ? T.mustard : T.primary,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Ico.Mic s={18} c="#fff" w={2}/>
-            </div>
+              border: 'none', cursor: 'pointer', flexShrink: 0,
+              transform: isListening ? 'scale(1.1)' : 'scale(1)',
+              transition: 'background .2s, transform .2s',
+            }}
+          >
+            <Ico.Mic s={18} c="#fff" w={2}/>
           </button>
         </div>
       </div>
@@ -392,7 +435,7 @@ export default function ListPage() {
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
           <div
             style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
-            onClick={() => { setShowForm(false); setSuggestions([]); }}
+            onClick={() => { stopListening(); setShowForm(false); setSuggestions([]); }}
           />
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -407,7 +450,7 @@ export default function ListPage() {
             <div style={{ padding: '0 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: T.serif, fontWeight: 500, fontSize: 19, letterSpacing: -0.3, color: T.ink }}>Añadir producto</span>
               <button
-                onClick={() => { setShowForm(false); setSuggestions([]); }}
+                onClick={() => { stopListening(); setShowForm(false); setSuggestions([]); }}
                 style={{ width: 32, height: 32, borderRadius: '50%', background: T.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.elev, border: 'none', cursor: 'pointer' }}
               >
                 <Ico.X s={14} c={T.ink}/>
@@ -415,11 +458,33 @@ export default function ListPage() {
             </div>
             <form onSubmit={handleAdd} style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Artículo *</label>
+                {/* Artículo label + mic toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.muted }}>Artículo *</label>
+                  {hasSpeech && (
+                    <button
+                      type="button"
+                      onClick={isListening ? stopListening : startListening}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '3px 10px', borderRadius: 99, border: 'none', cursor: 'pointer',
+                        background: isListening ? T.primary : T.paper,
+                        color: isListening ? '#fff' : T.muted,
+                        fontSize: 11.5, fontWeight: 600, fontFamily: T.sans,
+                        boxShadow: isListening ? 'none' : T.elev,
+                        transition: 'background .2s',
+                      }}
+                    >
+                      <Ico.Mic s={13} c={isListening ? '#fff' : T.muted} w={2}/>
+                      {isListening ? 'Escuchando…' : 'Dictá'}
+                    </button>
+                  )}
+                </div>
                 <input
-                  type="text" style={inp} placeholder="¿Qué necesitás?"
+                  type="text" style={{ ...inp, outline: isListening ? `2px solid ${T.primary}` : 'none' }}
+                  placeholder={isListening ? '🎙 Hablá ahora…' : '¿Qué necesitás?'}
                   value={form.articulo} onChange={e => handleArticuloChange(e.target.value)}
-                  autoFocus required
+                  autoFocus={!isListening} required
                 />
                 {suggestions.length > 0 && (
                   <div style={{
