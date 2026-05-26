@@ -141,6 +141,36 @@ class CatalogItem(db.Model):
         }
 
 
+class FamilyMember(db.Model):
+    """Integrante de familia asociado a una cuenta de usuario"""
+    __tablename__ = 'family_members'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    nombre = db.Column(db.String(100), nullable=False)
+    color = db.Column(db.String(20), default='#C76A4D')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'id': self.id, 'nombre': self.nombre, 'color': self.color}
+
+
+class Budget(db.Model):
+    """Presupuesto mensual definido por el usuario"""
+    __tablename__ = 'budgets'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    mes = db.Column(db.String(7), nullable=False)
+    monto_limite = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'mes', name='uq_budget_user_mes'),)
+
+    def to_dict(self):
+        return {'id': self.id, 'mes': self.mes, 'monto_limite': self.monto_limite}
+
+
 def _es_comprado(valor) -> bool:
     """Centraliza la comparación del estado 'Comprado'"""
     return valor in (True, "TRUE", "✓")

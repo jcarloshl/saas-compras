@@ -91,6 +91,20 @@ export const catalogAPI = {
   delete: (id) => api.delete(`/api/catalog/${id}`),
 };
 
+// Family API
+export const familyAPI = {
+  getAll: () => api.get('/api/family/members'),
+  create: (nombre, color) => api.post('/api/family/members', { nombre, color }),
+  update: (id, data) => api.put(`/api/family/members/${id}`, data),
+  delete: (id) => api.delete(`/api/family/members/${id}`),
+};
+
+// Budget API
+export const budgetAPI = {
+  get: (mes) => api.get(`/api/budget?mes=${mes}`),
+  upsert: (mes, monto_limite) => api.post('/api/budget', { mes, monto_limite }),
+};
+
 // Stats API
 export const statsAPI = {
   getArticulo: (nombre) =>

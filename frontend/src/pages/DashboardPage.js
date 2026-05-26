@@ -2,11 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { listsAPI, suggestedAPI } from '../api';
+import { listsAPI, suggestedAPI, familyAPI } from '../api';
 import { CAT_META, Ico, Spinner, tileBg } from '../theme';
 import AProgressBar from '../components/ui/AProgressBar';
 import APillTag from '../components/ui/APillTag';
 import BottomTabBar from '../components/BottomTabBar';
+import MemberPicker from '../components/MemberPicker';
+
+const MEMBER_KEY = 'cesta_member';
+function getActiveMember() { try { return JSON.parse(localStorage.getItem(MEMBER_KEY)); } catch { return null; } }
 
 const CACHE_KEY = 'dashboard_lists';
 function loadCache() { try { return JSON.parse(sessionStorage.getItem(CACHE_KEY)) || null; } catch { return null; } }
@@ -36,6 +40,10 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
 
+  const [activeMember, setActiveMember] = useState(() => getActiveMember());
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [showMemberPicker, setShowMemberPicker] = useState(false);
+
   const fetchLists = useCallback(async () => {
     try {
       const res = await listsAPI.getAll();
@@ -51,6 +59,20 @@ export default function DashboardPage() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [fetchLists]);
+  useEffect(() => {
+    familyAPI.getAll().then(res => {
+      setFamilyMembers(res.data);
+      if (res.data.length > 0 && !getActiveMember()) {
+        setShowMemberPicker(true);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSelectMember = (member) => {
+    localStorage.setItem(MEMBER_KEY, JSON.stringify(member));
+    setActiveMember(member);
+    setShowMemberPicker(false);
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -114,7 +136,15 @@ export default function DashboardPage() {
       <div style={{ padding: '52px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 13, color: T.muted, fontWeight: 500 }}>{greeting()}</div>
-          <div style={{ fontFamily: T.serif, fontSize: 22, fontWeight: 500, letterSpacing: -0.4 }}>{username}</div>
+          <div style={{ fontFamily: T.serif, fontSize: 22, fontWeight: 500, letterSpacing: -0.4 }}>
+            {activeMember ? activeMember.nombre : username}
+          </div>
+          {activeMember && (
+            <button onClick={() => setShowMemberPicker(true)} style={{ marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: T.muted, fontSize: 11.5, fontFamily: T.sans }}>
+              <Ico.People s={11} c={T.muted} w={1.5}/>
+              Cambiar
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Dark mode toggle */}
@@ -332,6 +362,14 @@ export default function DashboardPage() {
 
       {/* ── Tab bar ────────────────────────────────────────────── */}
       <BottomTabBar active="home"/>
+
+      {/* ── Member Picker ──────────────────────────────────────── */}
+      <MemberPicker
+        members={familyMembers}
+        show={showMemberPicker}
+        onSelect={handleSelectMember}
+        onClose={() => setShowMemberPicker(false)}
+      />
 
       {/* ── Modal: nueva lista ─────────────────────────────────── */}
       {showForm && (

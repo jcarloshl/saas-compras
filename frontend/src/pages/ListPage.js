@@ -37,7 +37,10 @@ export default function ListPage() {
   const [error, setError] = useState('');
 
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ articulo: '', cantidad: '1', categoria: 'Otros', agregado_por: user?.username || '' });
+  const getAgregadoPor = () => {
+    try { return JSON.parse(localStorage.getItem('cesta_member'))?.nombre || user?.username || ''; } catch { return user?.username || ''; }
+  };
+  const [form, setForm] = useState({ articulo: '', cantidad: '1', categoria: 'Otros', agregado_por: getAgregadoPor() });
   const [adding, setAdding] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
 
@@ -593,11 +596,6 @@ export default function ListPage() {
                     {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Quién lo agrega</label>
-                <input type="text" style={inp} placeholder="Tu nombre" value={form.agregado_por} onChange={e => setForm(f => ({ ...f, agregado_por: e.target.value }))}/>
               </div>
 
               <button type="submit" disabled={adding} style={{

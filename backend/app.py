@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import get_config
-from models import db, User, ShoppingList, ShoppingItem, PurchaseHistory, CatalogItem, _es_comprado
+from models import db, User, ShoppingList, ShoppingItem, PurchaseHistory, CatalogItem, FamilyMember, Budget, _es_comprado
 from auth import create_token, token_required, verify_token
 
 app = Flask(__name__)
@@ -717,6 +717,132 @@ def get_articulo_stats(user_id):
         'semanas_distintas':       len(semanas),
         'quien_anade_mas':         quien,
     })
+
+
+# ── Family Members ────────────────────────────────────────────────────────────
+
+@app.route('/api/family/members', methods=['GET'])
+@token_required
+def get_family_members(user_id):
+    members = FamilyMember.query.filter_by(user_id=user_id).order_by(FamilyMember.created_at).all()
+    return jsonify([m.to_dict() for m in members]), 200
+
+
+@app.route('/api/family/members', methods=['POST'])
+@token_required
+def create_family_member(user_id):
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'error': 'nombre requerido'}), 400
+    count = FamilyMember.query.filter_by(user_id=user_id).count()
+    if count >= 5:
+        return jsonify({'error': 'Máximo 5 integrantes por cuenta'}), 400
+    exists = FamilyMember.query.filter_by(user_id=user_id, nombre=nombre).first()
+    if exists:
+        return jsonify({'error': 'Ya existe un integrante con ese nombre'}), 409
+    member = FamilyMember(user_id=user_id, nombre=nombre, color=data.get('color', '#C76A4D'))
+    db.session.add(member)
+    db.session.commit()
+    return jsonify(member.to_dict()), 201
+
+
+@app.route('/api/family/members/<int:member_id>', methods=['PUT'])
+@token_required
+def update_family_member(user_id, member_id):
+    member = FamilyMember.query.get(member_id)
+    if not member or member.user_id != user_id:
+        return jsonify({'error': 'Not found'}), 404
+    data = request.get_json() or {}
+    if 'nombre' in data:
+        nombre = data['nombre'].strip()
+        if not nombre:
+            return jsonify({'error': 'nombre requerido'}), 400
+        member.nombre = nombre
+    if 'color' in data:
+        member.color = data['color']
+    db.session.commit()
+    return jsonify(member.to_dict()), 200
+
+
+@app.route('/api/family/members/<int:member_id>', methods=['DELETE'])
+@token_required
+def delete_family_member(user_id, member_id):
+    member = FamilyMember.query.get(member_id)
+    if not member or member.user_id != user_id:
+        return jsonify({'error': 'Not found'}), 404
+    db.session.delete(member)
+    db.session.commit()
+    return jsonify({'ok': True}), 200
+
+
+# ── Budget ─────────────────────────────────────────────────────────────────────
+
+@app.route('/api/budget', methods=['GET'])
+@token_required
+def get_budget(user_id):
+    mes = request.args.get('mes', datetime.utcnow().strftime('%Y-%m'))
+    budget = Budget.query.filter_by(user_id=user_id, mes=mes).first()
+    monto_limite = budget.monto_limite if budget else None
+
+    # Calcular gasto del mes usando ShoppingList.monto_total de listas del período
+    year, month = map(int, mes.split('-'))
+    from calendar import monthrange
+    _, last_day = monthrange(year, month)
+    inicio = datetime(year, month, 1)
+    fin = datetime(year, month, last_day, 23, 59, 59)
+
+    # IDs de listas con compras en el período
+    history_rows = PurchaseHistory.query.filter(
+        PurchaseHistory.user_id == user_id,
+        PurchaseHistory.fecha_compra >= inicio,
+        PurchaseHistory.fecha_compra <= fin,
+    ).all()
+
+    list_ids = list({r.list_id for r in history_rows})
+    gasto_actual = None
+    if list_ids:
+        listas = ShoppingList.query.filter(
+            ShoppingList.id.in_(list_ids),
+            ShoppingList.monto_total.isnot(None)
+        ).all()
+        if listas:
+            gasto_actual = sum(l.monto_total for l in listas)
+
+    # Breakdown por categoría (cantidad de artículos)
+    from collections import Counter
+    cat_counter = Counter(r.categoria for r in history_rows if r.categoria)
+    por_categoria = [{'categoria': cat, 'cantidad': cnt} for cat, cnt in cat_counter.most_common()]
+
+    porcentaje = None
+    if monto_limite and gasto_actual is not None:
+        porcentaje = round(gasto_actual / monto_limite * 100, 1)
+
+    return jsonify({
+        'mes': mes,
+        'monto_limite': monto_limite,
+        'gasto_actual': gasto_actual,
+        'porcentaje': porcentaje,
+        'por_categoria': por_categoria,
+    }), 200
+
+
+@app.route('/api/budget', methods=['POST'])
+@token_required
+def upsert_budget(user_id):
+    data = request.get_json() or {}
+    mes = data.get('mes', datetime.utcnow().strftime('%Y-%m'))
+    monto_limite = data.get('monto_limite')
+    if monto_limite is None or float(monto_limite) <= 0:
+        return jsonify({'error': 'monto_limite debe ser mayor a 0'}), 400
+    budget = Budget.query.filter_by(user_id=user_id, mes=mes).first()
+    if budget:
+        budget.monto_limite = float(monto_limite)
+    else:
+        budget = Budget(user_id=user_id, mes=mes, monto_limite=float(monto_limite))
+        db.session.add(budget)
+    db.session.commit()
+    return jsonify(budget.to_dict()), 200
 
 
 @app.route('/health', methods=['GET'])
