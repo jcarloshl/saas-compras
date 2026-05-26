@@ -6,7 +6,8 @@ import jwt
 import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from collections import defaultdict
+from collections import defaultdict, Counter
+from calendar import monthrange
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -697,7 +698,6 @@ def get_articulo_stats(user_id):
     ultima      = registros[0].fecha_compra
     anio_actual = datetime.utcnow().year
 
-    from collections import Counter
     cat_counter = Counter(r.categoria for r in registros)
     who_counter = Counter(r.agregado_por for r in registros if r.agregado_por)
     total       = len(registros)
@@ -787,7 +787,6 @@ def get_budget(user_id):
 
     # Calcular gasto del mes usando ShoppingList.monto_total de listas del período
     year, month = map(int, mes.split('-'))
-    from calendar import monthrange
     _, last_day = monthrange(year, month)
     inicio = datetime(year, month, 1)
     fin = datetime(year, month, last_day, 23, 59, 59)
@@ -810,7 +809,6 @@ def get_budget(user_id):
             gasto_actual = sum(l.monto_total for l in listas)
 
     # Breakdown por categoría (cantidad de artículos)
-    from collections import Counter
     cat_counter = Counter(r.categoria for r in history_rows if r.categoria)
     por_categoria = [{'categoria': cat, 'cantidad': cnt} for cat, cnt in cat_counter.most_common()]
 
