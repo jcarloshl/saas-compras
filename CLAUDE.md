@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Multi-user SaaS shopping list platform. Users authenticate via JWT and manage their own shopping lists with items. Deployed on Railway (PostgreSQL + backend + frontend as separate services). Also runs locally via Docker Compose (see `DOCKER.md`).
+Multi-user SaaS shopping list platform. Users authenticate via JWT and manage their own shopping lists with items. Deployed on Railway (PostgreSQL + backend + frontend as separate services). Also runs locally via Docker Compose for NAS Synology deployment (see `DOCKER.md`).
 
 ## Development Commands
 
@@ -28,7 +28,7 @@ npm start        # Dev server → http://localhost:3000
 npm run build    # Production build (also used to verify no compile errors)
 ```
 
-### Docker (local / NAS)
+### Docker (local / NAS Synology)
 
 ```bash
 docker compose up --build    # Frontend :3000, Backend :5000, PostgreSQL
@@ -179,7 +179,7 @@ All pages are lazy-loaded. Routes:
 #### Page summary
 
 - **DashboardPage** — greeting header with dark-mode toggle + Bell (→ `/budget`) + avatar (logout); horizontal carousel "Para ti, hoy" (Mercado Semanal modal, History, Próximamente); list cards with `tileBg` + `AProgressBar` + `monto_total` (read-only); dashed "Nueva lista" card. `BottomTabBar active="home"`.
-- **ListPage** — `ChevL` → `/dashboard`; "Comprar" button → `/lists/:id/shop`; creation date + `monto_total` chip (read-only); items grouped by category with uppercase headers; `AAvatar` for `agregado_por` on pending items; `Ico.Mic` floating bar (opens add-item bottom sheet). **Fix**: `handleToggle` reverts both `items` AND `stats` on API failure (`prevStats` captured before optimistic update).
+- **ListPage** — `ChevL` → `/dashboard`; "Comprar" button → `/lists/:id/shop`; creation date + `monto_total` chip (read-only); items grouped by category with uppercase headers; `AAvatar` for `agregado_por` on pending items. Floating bar has two zones: text area (opens form) + mic circle (opens form AND activa `webkitSpeechRecognition` con `lang: 'es-CL'`). Inside the form, a "Dictá" toggle chip allows activating/stopping the mic. `handleArticuloChange` is wrapped in `useCallback` (dependency of `startListening`). `handleToggle` reverts both `items` AND `stats` on API failure (`prevStats` captured before optimistic update).
 - **ShoppingModePage** — fullscreen dark gradient (`#2A1F18 → #3F2B1F`) regardless of theme; shows pending items one by one; `advance()` helper shared by "No hay" (no API call) and "Tachar y seguir" (calls `itemsAPI.update`, only advances on success); lists with no pending items go straight to the completion screen; completion screen captures `monto_total` and saves via `listsAPI.update(id, { monto_total })` directly.
 - **HistoryPage** — period selector inline below title; monthly spend card (→ `/budget`) shown when `monto_total_periodo > 0`; items grouped by category. `BottomTabBar active="hist"`.
 - **CatalogPage** — default grid view (2-col by category using `tileBg`); toggle to list view (`Ico.List`/`Ico.Grid`); pressing a category in grid filters list view; each row in list view navigates to `/product/:articulo`; edit/delete buttons wrapped in `onClick={e => e.stopPropagation()}` div. `BottomTabBar active="cat"`.
@@ -210,14 +210,21 @@ All pages are lazy-loaded. Routes:
 
 ### Deployment (Railway)
 
-- **Backend**: root `Procfile` — `web:` runs `waitress-serve`, `release:` runs `db.create_all()`. `db.create_all()` also called at module level in `app.py`. Schema is additive-only — new columns require manual `ALTER TABLE` or a new model (never `db.create_all()` for existing tables).
-- **Frontend**: `frontend/Procfile` — serves static build with `./node_modules/.bin/serve` (locally installed, not `npx`).
-- `backend/nixpacks.toml` — pins Python 3.11, includes `postgresql` nix package for `psycopg2`.
-- Railway auto-deploys from GitHub `main` on every push.
+Railway auto-deploys from GitHub `main` on every push. Both services use **Docker build mode** (Dockerfiles detected automatically):
+
+- **Backend** (`backend/Dockerfile`): `python:3.12-slim`, installs `psycopg2-binary` (not source build). CMD: `sh -c "exec waitress-serve --host=0.0.0.0 --port=${PORT:-5000} --threads=8 app:app"` — the `sh -c` is required so Railway's `$PORT` env var expands correctly. Railway start command is set to empty so the Dockerfile CMD takes precedence over any Procfile.
+- **Frontend** (`frontend/Dockerfile`): multi-stage — Node 18 builds React, then nginx:stable-alpine serves it. CMD runs `envsubst '${PORT}'` on `nginx.conf` template before starting nginx, so nginx listens on Railway's assigned `$PORT`. Start command also set to empty.
+- `db.create_all()` is called at module level in `app.py` — schema is created on first startup without a separate migration step. Schema is additive-only — new columns require manual `ALTER TABLE` (never rely on `db.create_all()` for existing tables).
+- `backend/nixpacks.toml` — kept for reference but Railway now uses the Dockerfile, not nixpacks.
 
 ### Deployment (Docker / Synology NAS)
 
-`docker compose up --build` from project root. Frontend served by Nginx (`frontend/nginx.conf`), backend by Waitress, PostgreSQL as `db` service. Backend creates the DB schema on first start via `db.create_all()`. See `DOCKER.md` for NAS-specific setup.
+The Docker files (`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, `frontend/nginx.conf`) are intended for self-hosting on a Synology NAS. `docker compose up --build` from project root. Frontend served by Nginx, backend by Waitress, PostgreSQL as `db` service.
+
+- `frontend/nginx.conf` uses `${PORT}` placeholder (substituted by `envsubst` at startup) and `listen ${PORT}`. In Docker Compose `PORT=80` is set explicitly so nginx listens on 80 (mapped as `3000:80`).
+- The `/api/` location uses `set $upstream http://backend:5000` with `resolver 127.0.0.11` (Docker DNS) to avoid nginx failing at startup when `backend` hostname is unknown — this also makes Railway-hosted nginx start correctly even though no traffic reaches that location there.
+
+See `DOCKER.md` for NAS-specific setup.
 
 ## Key Conventions
 
@@ -228,5 +235,7 @@ All pages are lazy-loaded. Routes:
 - `monto_total` — captured by `ShoppingModePage` at end of shopping trip via `listsAPI.update(id, { monto_total })`. Not editable in `DashboardPage` or `ListPage` (read-only display only).
 - `PurchaseHistory.list_id` has no FK constraint — history is preserved when a list is deleted.
 - `quien_anade_mas` percentages use total compras as denominator (includes entries without `agregado_por`), so percentages may be low if many entries have no author.
+- `psycopg2-binary` (not `psycopg2`) in `requirements.txt` — avoids C header compilation failure on Railway's Python 3.12 environment.
+- Speech recognition uses `window.SpeechRecognition || window.webkitSpeechRecognition` with `lang: 'es-CL'`. Requires HTTPS (satisfied by Railway). Only shown if `hasSpeech` is truthy.
 - Active virtual environment: `backend/venv/`. Ignore `backend/venvcd/` and `backend/backend/` (stale).
 - No tests in this repo (no `backend/tests/`, no `*.test.js`).
