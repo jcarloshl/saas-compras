@@ -65,7 +65,7 @@ Without `EMAIL_REMITENTE`/`EMAIL_PASSWORD`, `forgot-password` still works — th
 Flat Flask app — no blueprints. All routes live in `app.py`.
 
 - `config.py` — Config classes selected by `FLASK_ENV`: `DevelopmentConfig` (SQLite), `ProductionConfig` (PostgreSQL via `DATABASE_URL`), `TestingConfig` (in-memory SQLite). Railway's `postgres://` URLs are rewritten to `postgresql://` here. Also defines `CATEGORIAS` (11 fixed categories) and `FRONTEND_URL`.
-- `models.py` — Five SQLAlchemy models: `User → ShoppingList → ShoppingItem` (cascading deletes), `PurchaseHistory` (standalone, no cascade), and `CatalogItem` (user_id + articulo unique per user). `ShoppingList.monto_total` (Float, nullable) records the total spent on a shopping trip — captured from `ShoppingModePage`, not `DashboardPage`. `CatalogItem` is upserted automatically when an item is added to a list. `PurchaseHistory` is written when `comprado` is toggled `true` in the PUT endpoint (not on reset). `PurchaseHistory.list_id` is a plain `Integer` with **no FK constraint** — history is preserved when a list is deleted. `_es_comprado()` is defined but never called (dead code).
+- `models.py` — Seven SQLAlchemy models: `User → ShoppingList → ShoppingItem` (cascading deletes), `PurchaseHistory` (standalone, no cascade), `CatalogItem` (user_id + articulo unique per user), `FamilyMember` (up to 5 per user, has `nombre` + `color`), and `Budget` (unique per user+mes, `mes` format `YYYY-MM`). `ShoppingList.monto_total` (Float, nullable) records the total spent on a shopping trip — captured from `ShoppingModePage`, not `DashboardPage`. `CatalogItem` is upserted automatically when an item is added to a list. `PurchaseHistory` is written when `comprado` is toggled `true` in the PUT endpoint (not on reset). `PurchaseHistory.list_id` is a plain `Integer` with **no FK constraint** — history is preserved when a list is deleted. `_es_comprado()` is defined but never called (dead code).
 - `auth.py` — Manual JWT via PyJWT. `@token_required` decorator injects `user_id` as first arg. Tokens expire in 30 days.
 - `app.py` — All REST routes. Multi-tenancy enforced by checking `lst.user_id == user_id` before every operation. Contains `_calcular_sugeridos(user_id)` private helper.
 
@@ -101,6 +101,18 @@ GET    /api/catalog                          list user's CatalogItem entries
 PUT    /api/catalog/<id>                     update articulo or categoria
 DELETE /api/catalog/<id>
 
+GET    /api/family/members                   list family members (max 5)
+POST   /api/family/members                   create member { nombre, color }
+PUT    /api/family/members/<id>              update nombre or color
+DELETE /api/family/members/<id>
+
+GET    /api/budget?mes=YYYY-MM               returns { id, monto_limite, gasto_actual, porcentaje,
+                                             por_categoria, advertencia_listas_sin_monto, listas_sin_monto }
+                                             Validates mes format; gasto_actual sums ShoppingList.monto_total
+                                             for lists linked via PurchaseHistory in that month.
+POST   /api/budget                           upsert { mes, monto_limite } — float() validated, 400 on bad input
+DELETE /api/budget/<id>                      ownership-checked delete
+
 GET    /api/stats/articulo                   ?nombre= — purchase history stats for one article
                                              returns { total_veces, veces_este_anio, dias_desde_ultima,
                                              quien_anade_mas[{nombre, count, porcentaje}],
@@ -131,7 +143,7 @@ JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (la
 - `tileBg(dark, i)` — returns `TILE_TINTS[i % 8]` for the current theme.
 - `CATEGORIAS` — 11 canonical categories, must stay in sync with `backend/config.py`.
 - `CAT_META` — `{ emoji, color }` per category.
-- `Ico` — SVG icon components called as `<Ico.Plus s={18} c="#fff" w={2}/>`. Available: `Plus`, `Check`, `X`, `ChevL`, `ChevR`, `Clock`, `Grid`, `Sparkle`, `Search`, `Trash`, `Edit`, `List`, `Bell`, `People`, `Mic`, `Dots`, `Heart` (prop `filled`), `Camera`.
+- `Ico` — SVG icon components called as `<Ico.Plus s={18} c="#fff" w={2}/>`. Available: `Plus`, `Check`, `X`, `ChevL`, `ChevR`, `Clock`, `Grid`, `Sparkle`, `Search`, `Trash`, `Edit`, `List`, `Bell`, `People`, `Mic`, `Dots`, `Heart` (prop `filled`), `Camera`, `Wallet`.
 - `Spinner` — `<Spinner size={18} color="#fff"/>`.
 
 #### ThemeContext (`contexts/ThemeContext.js`)
@@ -150,13 +162,17 @@ All pages except `ForgotPasswordPage` and `ResetPasswordPage` use `useTheme()` i
 - `AProgressBar` — horizontal progress bar. Props: `{ value, total, color, height=6, T }`. Guards against `total=0`.
 - `APillTag` — rounded pill. Props: `{ children, color, bg, T }`.
 
+#### MemberPicker (`components/MemberPicker.js`)
+
+Bottom-sheet that asks "¿Quién eres?" when no active family member is selected in `localStorage`. Shows avatar buttons for each `FamilyMember` plus a "Continuar como invitado" option. `onSelect(member)` callback — caller is responsible for saving to `localStorage('cesta_member')` and closing. Used by `DashboardPage` on load and from the header chip.
+
 #### BottomTabBar (`components/BottomTabBar.js`)
 
 4 tabs: Listas → `/dashboard`, Categorías → `/catalog`, Historial → `/history`, Familia → `/family`. Uses `useTheme()` internally. `position: fixed, bottom: 0`. Pages that show it set `paddingBottom: 120`. **Not used** in detail pages (`ListPage`, `ShoppingModePage`, `ProductDetailPage`, `BudgetPage`, `FamilyPage`).
 
 #### api.js
 
-Single Axios instance. Request interceptor injects `Bearer` token. Response interceptor redirects to `/login` on 401. Exports seven named API objects: `authAPI`, `listsAPI`, `itemsAPI`, `historyAPI`, `suggestedAPI`, `catalogAPI`, `statsAPI`.
+Single Axios instance. Request interceptor injects `Bearer` token. Response interceptor redirects to `/login` on 401. Exports nine named API objects: `authAPI`, `listsAPI`, `itemsAPI`, `historyAPI`, `suggestedAPI`, `catalogAPI`, `statsAPI`, `familyAPI`, `budgetAPI`.
 
 #### App.js — routes
 
@@ -172,19 +188,20 @@ All pages are lazy-loaded. Routes:
 | `/lists/:id` | ListPage | Yes |
 | `/history` | HistoryPage | Yes |
 | `/catalog` | CatalogPage | Yes |
-| `/family` | FamilyPage | Yes (placeholder) |
-| `/budget` | BudgetPage | Yes (placeholder) |
+| `/family` | FamilyPage | Yes |
+| `/budget` | BudgetPage | Yes |
 | `/product/:articulo` | ProductDetailPage | Yes |
 
 #### Page summary
 
-- **DashboardPage** — greeting header with dark-mode toggle + Bell (→ `/budget`) + avatar (logout); horizontal carousel "Para ti, hoy" (Mercado Semanal modal, History, Próximamente); list cards with `tileBg` + `AProgressBar` + `monto_total` (read-only); dashed "Nueva lista" card. `BottomTabBar active="home"`.
-- **ListPage** — `ChevL` → `/dashboard`; "Comprar" button → `/lists/:id/shop`; creation date + `monto_total` chip (read-only); items grouped by category with uppercase headers; `AAvatar` for `agregado_por` on pending items. Floating bar has two zones: text area (opens form) + mic circle (opens form AND activa `webkitSpeechRecognition` con `lang: 'es-CL'`). Inside the form, a "Dictá" toggle chip allows activating/stopping the mic. `handleArticuloChange` is wrapped in `useCallback` (dependency of `startListening`). `handleToggle` reverts both `items` AND `stats` on API failure (`prevStats` captured before optimistic update).
+- **DashboardPage** — greeting header shows active family member name (from `localStorage('cesta_member')`) with "Cambiar" link + dark-mode toggle + `Ico.Wallet` (→ `/budget`) + avatar (logout); shows `MemberPicker` on load if no member saved and members exist; delete confirmation uses a custom bottom-sheet modal (`confirmDeleteId` state) instead of `window.confirm`; new lists are inserted at the front of the array; "Nueva lista" button sits inline next to the "Listas activas" title; horizontal carousel "Para ti, hoy"; list cards with `tileBg` + `AProgressBar` + `monto_total` (read-only, no decimals). `BottomTabBar active="home"`.
+- **ListPage** — `ChevL` → `/dashboard`; "Comprar" button → `/lists/:id/shop`; creation date + `monto_total` chip (read-only); items grouped by category with uppercase headers; `AAvatar` for `agregado_por` on pending items. `agregado_por` is sourced from `localStorage.getItem('cesta_member')?.nombre || user?.username` — there is no manual input field for it. Floating bar has two zones: text area (opens form) + mic circle (activates voice mode). Voice mode: `voiceModeRef` (ref) + `voiceMode` (state) pair; when active, final speech results auto-submit via `submitByVoice()` which calls `itemsAPI.add`, shows a toast, and restarts recognition. `submitByVoiceRef` avoids stale closure. A banner inside the form shows "Modo dictado activo" with "Detener" button. `handleArticuloChange` is wrapped in `useCallback` (dependency of `startListening`). `handleToggle` reverts both `items` AND `stats` on API failure (`prevStats` captured before optimistic update). Autocomplete uses `catalogAPI.getAll()` (not `itemsAPI.getCatalog`).
 - **ShoppingModePage** — fullscreen dark gradient (`#2A1F18 → #3F2B1F`) regardless of theme; shows pending items one by one; `advance()` helper shared by "No hay" (no API call) and "Tachar y seguir" (calls `itemsAPI.update`, only advances on success); lists with no pending items go straight to the completion screen; completion screen captures `monto_total` and saves via `listsAPI.update(id, { monto_total })` directly.
 - **HistoryPage** — period selector inline below title; monthly spend card (→ `/budget`) shown when `monto_total_periodo > 0`; items grouped by category. `BottomTabBar active="hist"`.
 - **CatalogPage** — default grid view (2-col by category using `tileBg`); toggle to list view (`Ico.List`/`Ico.Grid`); pressing a category in grid filters list view; each row in list view navigates to `/product/:articulo`; edit/delete buttons wrapped in `onClick={e => e.stopPropagation()}` div. `BottomTabBar active="cat"`.
 - **ProductDetailPage** — loads `statsAPI.getArticulo(decodeURIComponent(articulo))`; re-fetches if `:articulo` param changes; hero with emoji + category + "Recurrente" badge (if `semanas_distintas > 2`); 3-col stats grid (Total, Este Año, Última); horizontal percentage bars for `quien_anade_mas`; "Volver al catálogo" uses `navigate('/catalog', { replace: true })` to avoid adding a back-stack entry.
-- **FamilyPage / BudgetPage** — placeholders showing "Próximamente".
+- **FamilyPage** — CRUD for up to 5 family members. Each member has `nombre` + `color` (color picker). "Soy yo" button saves the member to `localStorage('cesta_member')` and navigates to `/dashboard`. Edit inline; delete with confirmation dialog.
+- **BudgetPage** — month selector (last 6 months); main card shows gasto vs. límite with `AProgressBar` + alert if ≥80%; "Definir límite" / "Editar" opens a bottom-sheet modal; category breakdown shows item counts (not amounts — labeled as "estimación"); yellow warning banner when `advertencia_listas_sin_monto` is true (lists without `monto_total` in that month).
 
 ### Design system conventions
 
@@ -203,8 +220,8 @@ All pages are lazy-loaded. Routes:
 
 ### Autocomplete (catalog)
 
-- `GET /api/lists/<id>/catalog` — `CatalogItem` + `ShoppingItem` fallbacks, deduplicated by `articulo.lower()`. Used in `ListPage`.
-- `GET /api/catalog` — only `CatalogItem` entries. Used in `CatalogPage`.
+- `GET /api/lists/<id>/catalog` — `CatalogItem` + `ShoppingItem` fallbacks, deduplicated by `articulo.lower()`. **Not used by `ListPage`** (switched to avoid showing deleted items).
+- `GET /api/catalog` — only `CatalogItem` entries. Used by both `CatalogPage` and `ListPage`.
 
 `ListPage` autocomplete: shows after 2 chars, up to 6 results. Uses `onMouseDown` (not `onClick`) on suggestions to prevent `onBlur` closing the dropdown before selection. Dropdown opens **above** the input (bottom-sheet context).
 
@@ -231,7 +248,8 @@ See `DOCKER.md` for NAS-specific setup.
 - All API routes prefixed `/api/`. Health check at `/health`.
 - `CATEGORIAS` must stay in sync between `backend/config.py` and `frontend/src/theme.js` (11 categories). When modifying: update both files + `CAT_META` in `theme.js`.
 - `comprado` (boolean) — purchase state on `ShoppingItem`.
-- `agregado_por` — free-text string tracking who added an item (supports family multi-user within one account).
+- `agregado_por` — auto-populated from `localStorage('cesta_member').nombre` (active family member) or `user.username` as fallback. No manual input field exists in `ListPage`.
+- `localStorage` keys: `cesta_dark` (theme), `cesta_member` (active family member object `{id, nombre, color}`), `token` (JWT), `user` (user object), `dashboard_lists` (list cache).
 - `monto_total` — captured by `ShoppingModePage` at end of shopping trip via `listsAPI.update(id, { monto_total })`. Not editable in `DashboardPage` or `ListPage` (read-only display only).
 - `PurchaseHistory.list_id` has no FK constraint — history is preserved when a list is deleted.
 - `quien_anade_mas` percentages use total compras as denominator (includes entries without `agregado_por`), so percentages may be low if many entries have no author.

@@ -46,6 +46,8 @@ export default function ListPage() {
 
   const [filterCat, setFilterCat] = useState('Todas');
   const [showToast, setShowToast] = useState(false);
+  const [editingMonto, setEditingMonto] = useState(false);
+  const [montoInput, setMontoInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceToast, setVoiceToast] = useState('');
@@ -75,6 +77,21 @@ export default function ListPage() {
   }, [id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSaveMonto = async () => {
+    const val = parseFloat(montoInput.replace(',', '.'));
+    if (isNaN(val) || val < 0) { setEditingMonto(false); return; }
+    try {
+      await listsAPI.update(id, { monto_total: val });
+      setListInfo(prev => ({ ...prev, monto_total: val }));
+    } catch {}
+    setEditingMonto(false);
+  };
+
+  const handleEditMonto = () => {
+    setMontoInput(listInfo?.monto_total != null ? String(listInfo.monto_total) : '');
+    setEditingMonto(true);
+  };
 
   const handleArticuloChange = useCallback((value) => {
     setForm(f => ({ ...f, articulo: value }));
@@ -298,14 +315,50 @@ export default function ListPage() {
                 {formatDate(listInfo.created_at)}
               </span>
             )}
-            {listInfo?.monto_total != null && (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '3px 9px', borderRadius: 99,
-                background: T.paperHi, color: T.olive,
-                fontSize: 12, fontWeight: 600,
-              }}>
-                💰 ${formatMonto(listInfo.monto_total)} registrado
+            {editingMonto ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: T.muted }}>$</span>
+                <input
+                  autoFocus
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={montoInput}
+                  onChange={e => setMontoInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveMonto(); if (e.key === 'Escape') setEditingMonto(false); }}
+                  style={{
+                    width: 110, padding: '3px 8px', borderRadius: 8,
+                    border: `1.5px solid ${T.primary}`, background: T.paper,
+                    color: T.ink, fontSize: 13, fontFamily: T.sans,
+                  }}
+                />
+                <button onClick={handleSaveMonto} style={{
+                  background: T.primary, color: '#fff', border: 'none',
+                  borderRadius: 8, padding: '3px 10px', fontSize: 12,
+                  fontWeight: 700, cursor: 'pointer', fontFamily: T.sans,
+                }}>OK</button>
+                <button onClick={() => setEditingMonto(false)} style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer', padding: 2,
+                }}>
+                  <Ico.X s={14} c={T.muted}/>
+                </button>
+              </span>
+            ) : (
+              <span
+                onClick={handleEditMonto}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '3px 9px', borderRadius: 99, cursor: 'pointer',
+                  background: listInfo?.monto_total != null ? T.paperHi : T.hairline,
+                  color: listInfo?.monto_total != null ? T.olive : T.muted,
+                  fontSize: 12, fontWeight: 600,
+                }}
+                title="Tocar para editar monto"
+              >
+                {listInfo?.monto_total != null
+                  ? <>💰 ${formatMonto(listInfo.monto_total)} registrado <Ico.Edit s={11} c={T.olive}/></>
+                  : <>💰 Monto no registrado <Ico.Edit s={11} c={T.muted}/></>
+                }
               </span>
             )}
           </div>

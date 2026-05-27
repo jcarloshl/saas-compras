@@ -75,13 +75,13 @@ export default function ResetPasswordPage() {
       <div style={{ marginTop: 32 }}>
         <div style={{ width: 64, height: 64, borderRadius: 18, background: '#FBEFE3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>🔐</div>
         <h1 style={{ margin: '24px 0 0', fontFamily: T.serif, fontWeight: 500, fontSize: 32, letterSpacing: -0.6 }}>Nueva contraseña</h1>
-        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: T.muted }}>Elegí una contraseña segura para tu cuenta.</p>
+        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: T.muted }}>Elige una contraseña segura para tu cuenta.</p>
       </div>
 
       {success ? (
         <div style={{ marginTop: 28 }}>
           <div style={{ background: '#ECFDF5', border: '1px solid #6EE7B7', color: '#065F46', borderRadius: 14, padding: '16px 18px', fontSize: 14, lineHeight: 1.5 }}>
-            <strong>Contraseña actualizada ✓</strong><br/>Ya podés iniciar sesión con tu nueva contraseña. Redirigiendo…
+            <strong>Contraseña actualizada ✓</strong><br/>Ya puedes iniciar sesión con tu nueva contraseña. Redirigiendo…
           </div>
           <Link to="/login" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
