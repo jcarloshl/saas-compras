@@ -1,11 +1,8 @@
 """Main Flask application"""
 import os
-import smtplib
-import ssl
 import jwt
 import threading
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
 from collections import defaultdict, Counter
 from calendar import monthrange
 from datetime import datetime, timedelta
@@ -117,28 +114,21 @@ def _verify_reset_token(token):
 
 
 def _send_reset_email(to_email, username, reset_link):
-    """Enviar email con enlace de recuperación de contraseña"""
-    remitente = app.config.get('EMAIL_REMITENTE')
-    password = app.config.get('EMAIL_PASSWORD')
+    """Enviar email con enlace de recuperación de contraseña via Resend API (HTTPS)"""
+    resend_api_key = app.config.get('RESEND_API_KEY')
 
-    if not remitente or not password:
-        # En desarrollo sin credenciales, sólo loggear
+    if not resend_api_key:
         app.logger.info(f"[DEV] Enlace de reset para {to_email}: {reset_link}")
         return
 
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = 'Recuperar contraseña - Lista de Compras'
-    msg['From'] = remitente
-    msg['To'] = to_email
-
     html_body = f"""
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-      <h2 style="color:#0d6efd">🛒 Lista de Compras</h2>
+      <h2 style="color:#C76A4D">Lista de Compras</h2>
       <p>Hola <strong>{username}</strong>,</p>
       <p>Recibimos una solicitud para restablecer tu contraseña.
          Haz clic en el botón para crear una nueva:</p>
       <a href="{reset_link}"
-         style="display:inline-block;padding:12px 24px;background:#0d6efd;
+         style="display:inline-block;padding:12px 24px;background:#C76A4D;
                 color:#fff;text-decoration:none;border-radius:6px;margin:16px 0">
         Restablecer contraseña
       </a>
@@ -148,17 +138,22 @@ def _send_reset_email(to_email, username, reset_link):
       </p>
     </div>
     """
-    msg.attach(MIMEText(html_body, 'html'))
 
-    import socket
-    # Forzar IPv4: Railway no tiene ruta IPv6 saliente estable
-    smtp_ip = socket.getaddrinfo('smtp.gmail.com', 587, socket.AF_INET)[0][4][0]
-    context = ssl.create_default_context()
-    with smtplib.SMTP(smtp_ip, 587, timeout=10) as server:
-        server.ehlo()
-        server.starttls(context=context, server_hostname='smtp.gmail.com')
-        server.login(remitente, password)
-        server.sendmail(remitente, to_email, msg.as_string())
+    response = requests.post(
+        'https://api.resend.com/emails',
+        headers={
+            'Authorization': f'Bearer {resend_api_key}',
+            'Content-Type': 'application/json',
+        },
+        json={
+            'from': 'Lista de Compras <onboarding@resend.dev>',
+            'to': [to_email],
+            'subject': 'Recuperar contraseña - Lista de Compras',
+            'html': html_body,
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
 
 
 def _send_reset_email_bg(to_email, username, reset_link):
