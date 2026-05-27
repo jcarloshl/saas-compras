@@ -103,6 +103,7 @@ export const familyAPI = {
 export const budgetAPI = {
   get: (mes) => api.get(`/api/budget?mes=${mes}`),
   upsert: (mes, monto_limite) => api.post('/api/budget', { mes, monto_limite }),
+  delete: (id) => api.delete(`/api/budget/${id}`),
 };
 
 // Stats API

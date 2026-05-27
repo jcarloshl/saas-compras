@@ -781,17 +781,20 @@ def delete_family_member(user_id, member_id):
 @app.route('/api/budget', methods=['GET'])
 @token_required
 def get_budget(user_id):
+    import re
     mes = request.args.get('mes', datetime.utcnow().strftime('%Y-%m'))
+    if not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', mes):
+        return jsonify({'error': 'Formato de mes inválido. Use YYYY-MM (ej: 2026-05)'}), 400
+
     budget = Budget.query.filter_by(user_id=user_id, mes=mes).first()
     monto_limite = budget.monto_limite if budget else None
+    budget_id = budget.id if budget else None
 
-    # Calcular gasto del mes usando ShoppingList.monto_total de listas del período
     year, month = map(int, mes.split('-'))
     _, last_day = monthrange(year, month)
     inicio = datetime(year, month, 1)
     fin = datetime(year, month, last_day, 23, 59, 59)
 
-    # IDs de listas con compras en el período
     history_rows = PurchaseHistory.query.filter(
         PurchaseHistory.user_id == user_id,
         PurchaseHistory.fecha_compra >= inicio,
@@ -800,15 +803,16 @@ def get_budget(user_id):
 
     list_ids = list({r.list_id for r in history_rows})
     gasto_actual = None
+    listas_sin_monto = 0
     if list_ids:
-        listas = ShoppingList.query.filter(
+        listas_con = ShoppingList.query.filter(
             ShoppingList.id.in_(list_ids),
             ShoppingList.monto_total.isnot(None)
         ).all()
-        if listas:
-            gasto_actual = sum(l.monto_total for l in listas)
+        listas_sin_monto = len(list_ids) - len(listas_con)
+        if listas_con:
+            gasto_actual = sum(l.monto_total for l in listas_con)
 
-    # Breakdown por categoría (cantidad de artículos)
     cat_counter = Counter(r.categoria for r in history_rows if r.categoria)
     por_categoria = [{'categoria': cat, 'cantidad': cnt} for cat, cnt in cat_counter.most_common()]
 
@@ -817,11 +821,14 @@ def get_budget(user_id):
         porcentaje = round(gasto_actual / monto_limite * 100, 1)
 
     return jsonify({
+        'id': budget_id,
         'mes': mes,
         'monto_limite': monto_limite,
         'gasto_actual': gasto_actual,
         'porcentaje': porcentaje,
         'por_categoria': por_categoria,
+        'advertencia_listas_sin_monto': listas_sin_monto > 0,
+        'listas_sin_monto': listas_sin_monto,
     }), 200
 
 
@@ -831,16 +838,33 @@ def upsert_budget(user_id):
     data = request.get_json() or {}
     mes = data.get('mes', datetime.utcnow().strftime('%Y-%m'))
     monto_limite = data.get('monto_limite')
-    if monto_limite is None or float(monto_limite) <= 0:
+    if monto_limite is None:
+        return jsonify({'error': 'monto_limite es requerido'}), 400
+    try:
+        monto_limite = float(monto_limite)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'monto_limite debe ser un número válido'}), 400
+    if monto_limite <= 0:
         return jsonify({'error': 'monto_limite debe ser mayor a 0'}), 400
     budget = Budget.query.filter_by(user_id=user_id, mes=mes).first()
     if budget:
-        budget.monto_limite = float(monto_limite)
+        budget.monto_limite = monto_limite
     else:
-        budget = Budget(user_id=user_id, mes=mes, monto_limite=float(monto_limite))
+        budget = Budget(user_id=user_id, mes=mes, monto_limite=monto_limite)
         db.session.add(budget)
     db.session.commit()
     return jsonify(budget.to_dict()), 200
+
+
+@app.route('/api/budget/<int:budget_id>', methods=['DELETE'])
+@token_required
+def delete_budget(user_id, budget_id):
+    budget = Budget.query.filter_by(id=budget_id, user_id=user_id).first()
+    if not budget:
+        return jsonify({'error': 'Presupuesto no encontrado'}), 404
+    db.session.delete(budget)
+    db.session.commit()
+    return jsonify({'message': 'Presupuesto eliminado'}), 200
 
 
 @app.route('/health', methods=['GET'])

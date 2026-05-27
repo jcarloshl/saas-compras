@@ -147,11 +147,26 @@ export default function BudgetPage() {
             )}
           </div>
 
+          {/* Advertencia listas sin monto total */}
+          {data?.advertencia_listas_sin_monto && (
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 14, padding: '10px 14px', fontSize: 13, color: '#92400E', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <span style={{ flexShrink: 0, fontSize: 15 }}>⚠</span>
+              <span>
+                {data.listas_sin_monto === 1
+                  ? 'Hay 1 lista de compras sin monto registrado este mes. El gasto mostrado puede ser menor al real.'
+                  : `Hay ${data.listas_sin_monto} listas de compras sin monto registrado este mes. El gasto mostrado puede ser menor al real.`}
+              </span>
+            </div>
+          )}
+
           {/* Breakdown por categoría */}
           {data?.por_categoria?.length > 0 && (
             <div style={{ background: T.paper, borderRadius: 20, padding: '16px 18px', boxShadow: T.elev }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 2 }}>
                 Artículos por categoría
+              </div>
+              <div style={{ fontSize: 11.5, color: T.faint, marginBottom: 14 }}>
+                Cantidad de artículos comprados — estimación, no incluye precios por ítem
               </div>
               {(() => {
                 const total = data.por_categoria.reduce((s, c) => s + c.cantidad, 0);
