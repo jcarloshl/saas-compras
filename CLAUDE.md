@@ -53,10 +53,10 @@ Production env vars (Railway):
 | `DATABASE_URL` | PostgreSQL URL (auto-provided by Railway) |
 | `SECRET_KEY` | JWT signing key |
 | `FRONTEND_URL` | Frontend URL for password reset links |
-| `EMAIL_REMITENTE` | Gmail address for sending reset emails |
-| `EMAIL_PASSWORD` | Gmail App Password (16-char) |
+| `BREVO_API_KEY` | Brevo transactional email API key (HTTPS — Railway blocks SMTP) |
+| `EMAIL_REMITENTE` | Sender address verified in Brevo (e.g. your Gmail) |
 
-Without `EMAIL_REMITENTE`/`EMAIL_PASSWORD`, `forgot-password` still works — the reset link is printed to server logs.
+Without `BREVO_API_KEY`, `forgot-password` still works — the reset link is printed to server logs.
 
 ## Architecture
 
@@ -125,7 +125,7 @@ GET    /health
 
 ### Password Recovery Flow
 
-JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (last 12 chars of password hash); changing the password invalidates the token. Expiry: 1 hour. Email is sent via daemon `threading.Thread` so HTTP response never blocks.
+JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (last 12 chars of password hash); changing the password invalidates the token. Expiry: 1 hour. Email is sent via **Brevo HTTP API** (`https://api.brevo.com/v3/smtp/email`) in a daemon `threading.Thread` so HTTP response never blocks. Railway blocks all outbound SMTP (ports 465 and 587) — any SMTP-based approach will fail there.
 
 ### Mercado Semanal (suggested weekly list)
 
@@ -216,7 +216,7 @@ All pages are lazy-loaded. Routes:
 `fetchData` uses three sequential `try/catch` blocks (not `Promise.all`) so items always render even if secondary calls fail:
 1. `itemsAPI.getAll(id)` — critical
 2. `listsAPI.get(id)` — non-critical (title)
-3. `itemsAPI.getCatalog(id)` — non-critical (autocomplete)
+3. `catalogAPI.getAll()` — non-critical (autocomplete, switched from `itemsAPI.getCatalog` to avoid showing deleted items)
 
 ### Autocomplete (catalog)
 
