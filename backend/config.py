@@ -10,8 +10,9 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = os.environ.get('FLASK_ENV') == 'development'
 
-    # Email — usa Resend API (HTTP) en Railway; loguea el link en dev si no hay clave
-    RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
+    # Email — usa Brevo API (HTTP) en Railway; loguea el link en dev si no hay clave
+    BREVO_API_KEY = os.environ.get('BREVO_API_KEY')
+    EMAIL_REMITENTE = os.environ.get('EMAIL_REMITENTE')
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
     # Categorías (del proyecto original)

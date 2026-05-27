@@ -114,10 +114,11 @@ def _verify_reset_token(token):
 
 
 def _send_reset_email(to_email, username, reset_link):
-    """Enviar email con enlace de recuperación de contraseña via Resend API (HTTPS)"""
-    resend_api_key = app.config.get('RESEND_API_KEY')
+    """Enviar email con enlace de recuperación de contraseña via Brevo API (HTTPS)"""
+    brevo_key = app.config.get('BREVO_API_KEY')
+    sender_email = app.config.get('EMAIL_REMITENTE', 'noreply@listacompras.app')
 
-    if not resend_api_key:
+    if not brevo_key:
         app.logger.info(f"[DEV] Enlace de reset para {to_email}: {reset_link}")
         return
 
@@ -140,16 +141,16 @@ def _send_reset_email(to_email, username, reset_link):
     """
 
     response = requests.post(
-        'https://api.resend.com/emails',
+        'https://api.brevo.com/v3/smtp/email',
         headers={
-            'Authorization': f'Bearer {resend_api_key}',
+            'api-key': brevo_key,
             'Content-Type': 'application/json',
         },
         json={
-            'from': 'Lista de Compras <onboarding@resend.dev>',
-            'to': [to_email],
+            'sender': {'name': 'Lista de Compras', 'email': sender_email},
+            'to': [{'email': to_email}],
             'subject': 'Recuperar contraseña - Lista de Compras',
-            'html': html_body,
+            'htmlContent': html_body,
         },
         timeout=15,
     )
