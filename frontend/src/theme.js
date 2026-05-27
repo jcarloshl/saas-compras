@@ -95,6 +95,7 @@ export const Ico = {
   Dots:    ({ s=20, c='currentColor', w=1.8 }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.5" fill={c}/><circle cx="12" cy="12" r="1.5" fill={c}/><circle cx="19" cy="12" r="1.5" fill={c}/></svg>,
   Heart:   ({ s=20, c='currentColor', w=1.8, filled=false }) => <svg width={s} height={s} viewBox="0 0 24 24" fill={filled ? c : 'none'}><path d="M12 21C12 21 4 14.5 4 9a5 5 0 018-4 5 5 0 018 4c0 5.5-8 12-8 12z" stroke={c} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round"/></svg>,
   Camera:  ({ s=20, c='currentColor', w=1.8 }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke={c} strokeWidth={w}/><circle cx="12" cy="14" r="3.5" stroke={c} strokeWidth={w}/><path d="M8 7l2-3h4l2 3" stroke={c} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  Wallet:  ({ s=20, c='currentColor', w=1.8 }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M2 9a2 2 0 012-2h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9z" stroke={c} strokeWidth={w}/><path d="M6 7V6a2 2 0 012-2h7a2 2 0 012 2v1" stroke={c} strokeWidth={w} strokeLinecap="round"/><rect x="15" y="12" width="5" height="4" rx="1" stroke={c} strokeWidth={w}/><circle cx="17.5" cy="14" r="0.75" fill={c}/></svg>,
 };
 
 // ─── Spinner ─────────────────────────────────────────────────────────────────

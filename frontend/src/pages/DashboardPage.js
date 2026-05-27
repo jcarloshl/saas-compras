@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const [activeMember, setActiveMember] = useState(() => getActiveMember());
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -87,7 +88,6 @@ export default function DashboardPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Eliminar esta lista y todos sus artículos?')) return;
     setDeletingId(id);
     try {
       await listsAPI.delete(id);
@@ -155,13 +155,13 @@ export default function DashboardPage() {
           }}>
             {dark ? '☀️' : '🌙'}
           </button>
-          {/* Bell → /budget */}
+          {/* Wallet → /budget */}
           <button onClick={() => navigate('/budget')} style={{
             width: 40, height: 40, borderRadius: 12, border: 'none',
             background: T.paper, boxShadow: T.elev, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Ico.Bell s={20} c={T.ink} w={1.8}/>
+            <Ico.Wallet s={20} c={T.ink} w={1.8}/>
           </button>
           {/* Avatar → logout */}
           <button onClick={logout} title="Cerrar sesión" style={{
@@ -341,7 +341,7 @@ export default function DashboardPage() {
                       {lst.monto_total != null ? `💰 $${formatMonto(lst.monto_total)} registrado` : 'Sin monto registrado'}
                     </span>
                     <button
-                      onClick={e => { e.stopPropagation(); handleDelete(lst.id); }}
+                      onClick={e => { e.stopPropagation(); setConfirmDeleteId(lst.id); }}
                       disabled={deletingId === lst.id}
                       style={{
                         width: 30, height: 30, borderRadius: 8, border: 'none',
@@ -362,6 +362,39 @@ export default function DashboardPage() {
 
       {/* ── Tab bar ────────────────────────────────────────────── */}
       <BottomTabBar active="home"/>
+
+      {/* ── Confirmar eliminación ──────────────────────────────── */}
+      {confirmDeleteId && (
+        <div onClick={() => setConfirmDeleteId(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: T.cream, borderRadius: '24px 24px 0 0', padding: '20px 20px 48px', width: '100%', maxWidth: 480, boxShadow: '0 -10px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+              <div style={{ width: 40, height: 5, borderRadius: 99, background: T.hairline }}/>
+            </div>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>🗑</div>
+              <div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+                ¿Eliminar esta lista?
+              </div>
+              <div style={{ fontSize: 13.5, color: T.muted, lineHeight: 1.5 }}>
+                Se eliminarán todos sus artículos.<br/>Esta acción no se puede deshacer.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDeleteId(null)} style={{ flex: 1, padding: '14px 0', borderRadius: 14, border: `1px solid ${T.hairline}`, fontSize: 14, fontWeight: 600, color: T.ink, background: 'transparent', cursor: 'pointer', fontFamily: T.sans }}>
+                Cancelar
+              </button>
+              <button
+                onClick={() => { handleDelete(confirmDeleteId); setConfirmDeleteId(null); }}
+                disabled={deletingId === confirmDeleteId}
+                style={{ flex: 1, padding: '14px 0', borderRadius: 14, background: '#DC2626', color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: T.sans, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
+                <Ico.Trash s={15} c="#fff" w={2}/>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Member Picker ──────────────────────────────────────── */}
       <MemberPicker
