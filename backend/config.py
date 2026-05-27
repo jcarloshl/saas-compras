@@ -50,6 +50,11 @@ class ProductionConfig(Config):
     # Reemplazar postgres:// con postgresql:// si es necesario (SQLAlchemy 1.4+)
     if SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
         SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
+    # Railway cierra conexiones inactivas; pool_pre_ping verifica antes de reutilizar
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,
+    }
 
 
 class TestingConfig(Config):
