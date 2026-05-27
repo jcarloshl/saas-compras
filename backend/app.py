@@ -150,8 +150,13 @@ def _send_reset_email(to_email, username, reset_link):
     """
     msg.attach(MIMEText(html_body, 'html'))
 
+    import socket
+    # Forzar IPv4: Railway no tiene ruta IPv6 saliente estable
+    smtp_ip = socket.getaddrinfo('smtp.gmail.com', 587, socket.AF_INET)[0][4][0]
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context, timeout=10) as server:
+    with smtplib.SMTP(smtp_ip, 587, timeout=10) as server:
+        server.ehlo()
+        server.starttls(context=context, server_hostname='smtp.gmail.com')
         server.login(remitente, password)
         server.sendmail(remitente, to_email, msg.as_string())
 
