@@ -24,6 +24,8 @@ export default function ShoppingModePage() {
   const [advancing,  setAdvancing]  = useState(false);
   const [apiError,   setApiError]   = useState(null);
   const [loading,    setLoading]    = useState(true);
+  const [precio,     setPrecio]     = useState('');
+  const [precioAcum, setPrecioAcum] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -46,7 +48,18 @@ export default function ShoppingModePage() {
     load();
   }, [id]);
 
-  const advance = () => {
+  useEffect(() => {
+    if (done && precioAcum > 0 && monto === '') {
+      setMonto(String(precioAcum.toFixed(2)));
+    }
+  }, [done]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const advance = (precioActual = '') => {
+    const parsed = parseFloat(precioActual);
+    if (precioActual !== '' && !isNaN(parsed)) {
+      setPrecioAcum(prev => prev + parsed);
+    }
+    setPrecio('');
     const next = currentIdx + 1;
     if (next >= items.length) setDone(true);
     else setIdx(next);
@@ -56,8 +69,11 @@ export default function ShoppingModePage() {
     setAdvancing(true);
     setApiError(null);
     try {
-      await itemsAPI.update(id, items[currentIdx].id, { comprado: true });
-      advance();
+      const payload = { comprado: true };
+      const parsed = parseFloat(precio);
+      if (precio !== '' && !isNaN(parsed)) payload.precio = parsed;
+      await itemsAPI.update(id, items[currentIdx].id, payload);
+      advance(precio);
     } catch {
       setApiError('No se pudo registrar. ¿Reintentar?');
     } finally {
@@ -204,6 +220,31 @@ export default function ShoppingModePage() {
               </div>
             )}
 
+            {/* Precio opcional */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'rgba(255,255,255,0.07)', borderRadius: 16,
+              padding: '10px 16px', marginTop: 16,
+              border: precio ? '1px solid rgba(199,106,77,0.5)' : '1px solid transparent',
+              transition: 'border-color 200ms ease',
+            }}>
+              <span style={{ fontFamily: SERIF, fontSize: 18, color: MUTED }}>$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Precio (opcional)"
+                value={precio}
+                onChange={e => setPrecio(e.target.value)}
+                inputMode="decimal"
+                style={{
+                  fontFamily: SANS, fontSize: 18, fontWeight: 500,
+                  color: WHITE, background: 'transparent',
+                  border: 'none', outline: 'none', width: 160,
+                }}
+              />
+            </div>
+
             {/* Error API */}
             {apiError && (
               <div style={{ fontSize: 13, color: MUSTARD, textAlign: 'center', marginBottom: 8 }}>
@@ -241,6 +282,11 @@ export default function ShoppingModePage() {
 
             <div style={{ fontSize: 15, color: MUTED, textAlign: 'center', marginBottom: 8 }}>
               ¿Cuánto gastaste en total?
+              {precioAcum > 0 && (
+                <div style={{ fontSize: 12, color: PRIMARY, marginTop: 4 }}>
+                  Suma ingresada: ${precioAcum.toFixed(2)}
+                </div>
+              )}
             </div>
 
             <div style={{ position: 'relative', textAlign: 'center' }}>
@@ -274,7 +320,7 @@ export default function ShoppingModePage() {
             <div style={{ display: 'flex', gap: 10 }}>
               {/* No hay */}
               <button
-                onClick={advance}
+                onClick={() => advance('')}
                 disabled={advancing}
                 style={{
                   flex: 1, height: 56, borderRadius: 16, border: 'none',

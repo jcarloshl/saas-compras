@@ -75,6 +75,7 @@ class ShoppingItem(db.Model):
     categoria = db.Column(db.String(100), default='Otros')
     comprado = db.Column(db.Boolean, default=False)
     agregado_por = db.Column(db.String(100), default='')
+    precio = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -86,6 +87,7 @@ class ShoppingItem(db.Model):
             'categoria': self.categoria,
             'comprado': self.comprado,
             'agregado_por': self.agregado_por,
+            'precio': self.precio,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
         }
@@ -103,6 +105,7 @@ class PurchaseHistory(db.Model):
     cantidad = db.Column(db.String(50), default='1')
     categoria = db.Column(db.String(100), default='Otros')
     agregado_por = db.Column(db.String(100), default='')
+    precio = db.Column(db.Float, nullable=True)
     fecha_compra = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):
@@ -114,6 +117,7 @@ class PurchaseHistory(db.Model):
             'cantidad': self.cantidad,
             'categoria': self.categoria,
             'agregado_por': self.agregado_por,
+            'precio': self.precio,
             'fecha_compra': self.fecha_compra.isoformat(),
         }
 

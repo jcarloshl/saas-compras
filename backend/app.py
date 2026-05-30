@@ -385,11 +385,12 @@ def update_item(user_id, list_id, item_id):
 
     data = request.json or {}
 
-    # Permitir actualizar: comprado, cantidad, categoria, agregado_por
+    # Permitir actualizar: comprado, cantidad, categoria, agregado_por, precio
     if 'comprado' in data:
         was_comprado = item.comprado
         item.comprado = data['comprado']
         if data['comprado'] and not was_comprado:
+            raw_precio = data.get('precio')
             db.session.add(PurchaseHistory(
                 user_id=user_id,
                 list_id=list_id,
@@ -398,6 +399,7 @@ def update_item(user_id, list_id, item_id):
                 cantidad=item.cantidad,
                 categoria=item.categoria,
                 agregado_por=item.agregado_por,
+                precio=float(raw_precio) if raw_precio not in (None, '') else None,
             ))
     if 'cantidad' in data:
         item.cantidad = data['cantidad']
@@ -405,6 +407,9 @@ def update_item(user_id, list_id, item_id):
         item.categoria = data['categoria']
     if 'agregado_por' in data:
         item.agregado_por = data['agregado_por']
+    if 'precio' in data:
+        val = data['precio']
+        item.precio = float(val) if val not in (None, '') else None
 
     db.session.commit()
 
