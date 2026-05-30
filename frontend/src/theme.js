@@ -74,6 +74,96 @@ export const CAT_META = {
   'Otros':              { emoji: '📦', color: '#7A6A5C' },
 };
 
+// ─── Auto-detección de categoría ─────────────────────────────────────────────
+const CAT_KEYWORDS = {
+  'Frutas y Verduras': [
+    'manzana','pera','naranja','limon','platano','banana','uva','fresa','frutilla',
+    'sandia','melon','durazno','nectarin','ciruela','cereza','mango','pina','kiwi',
+    'papaya','frambuesa','mora','arandano','maracuya','higo','palta','aguacate',
+    'tomate','lechuga','zanahoria','papa','cebolla','ajo','pimiento','brocoli',
+    'coliflor','espinaca','acelga','pepino','zapallo','calabaza','apio','puerro',
+    'rabano','remolacha','betarraga','champiñon','hongo','alcachofa','esparrago',
+    'choclo','maiz','habas','arveja','poroto','lenteja','garbanzo','repollo',
+    'berro','rucula','endivia','nabo','chayote','perejil','cilantro','albahaca',
+    'verdura','fruta','vegetal','ensalada',
+  ],
+  'Carnes y Pescados': [
+    'pollo','res','vaca','cerdo','chancho','cordero','pavo','carne','filete',
+    'bistec','chuleta','costilla','lomo','pechuga','muslo','ala','paleta',
+    'salchicha','vienesa','chorizo','longaniza','jamon','tocino','bacon','mortadela',
+    'pate','asado','plateada','mechada','osobuco','menudencia','menudo',
+    'salmon','atun','merluza','reineta','corvina','trucha','camaron','marisco',
+    'pescado','calamar','pulpo','mejillon','ostra','ostion','almeja',
+    'anchoa','sardina','jurel','congrio',
+  ],
+  'Lácteos y Huevos': [
+    'leche','queso','yogur','yogurt','mantequilla','margarina','crema','nata',
+    'kefir','ricotta','cottage','huevo','quesillo','manjar','dulce de leche',
+    'helado','lacteo','buttermilk','cuajada','requesón','requesón',
+    'loncoleche','soprole','nestlé',
+  ],
+  'Panadería': [
+    'pan','marraqueta','hallulla','baguette','ciabatta','croissant','tostada',
+    'galleta','bizcocho','pastel','torta','queque','muffin','pancake','wafle',
+    'bagel','dona','donut','empanada','masa','levadura','brioche','focaccia',
+    'pitta','pita','chapata','pan de molde','pan integral','pan centeno',
+    'milhojas','berlín','sopaipilla',
+  ],
+  'Almacén / Despensa': [
+    'arroz','fideos','pasta','spaghetti','tallarin','avena','cereal','granola',
+    'muesli','quinoa','aceite','vinagre','sal','azucar','pimienta','oregano',
+    'condimento','especias','salsa','ketchup','mayonesa','mostaza','soya','soja',
+    'mermelada','miel','manteca','conserva','sopa','caldo','te','cafe','cacao',
+    'chocolate','vainilla','canela','jengibre','comino','paprika','curry',
+    'nuez moscada','laurel','tomillo','romero','maicena','polvo de hornear',
+    'gelatina','pudin','flan','cocoa','miso','tofu','tempeh','algas',
+  ],
+  'Bebidas': [
+    'agua','jugo','refresco','gaseosa','bebida','cola','pepsi','sprite','fanta',
+    'cerveza','vino','pisco','ron','whisky','vodka','chicha','gin','tequila',
+    'néctar','nectar','zumo','isotónico','energética','energetica','limonada',
+    'te helado','kombucha','leche vegetal','bebida vegetal','smoothie','batido',
+    'sidra','hidratante','agua mineral','agua con gas',
+  ],
+  'Limpieza del Hogar': [
+    'detergente','jabon platos','lavavajillas','cloro','lejia','limpiador',
+    'desengrasante','desinfectante','escoba','trapeador','fregona','esponja',
+    'guante','bolsa basura','papel higienico','papel cocina','servilleta',
+    'suavizante','quitamanchas','limpiavidrios','ambientador','insecticida',
+    'rodenticida','trampas','cera','lustramuebles','limpia horno','quita sarro',
+    'pastilla wc','escobilla','recogedor','plumero',
+  ],
+  'Higiene Personal': [
+    'shampoo','champu','acondicionador','jabon cuerpo','gel ducha','crema corporal',
+    'desodorante','antitranspirante','pasta dental','dentifrico','cepillo dientes',
+    'enjuague bucal','hilo dental','rasuradora','afeitadora','crema afeitar',
+    'toalla femenina','tampon','pañal','panal','algodón','algodon','protector solar',
+    'maquillaje','base','labial','rimel','mascara','sombra','perfume','colonia',
+    'tónico','tonico','serum','hidratante facial','exfoliante','mascarilla facial',
+  ],
+  'Snacks y Dulces': [
+    'papas fritas','chips','mani','almendra','nuez','pistache','pistacho','castana',
+    'caramelo','dulce','gomita','chicle','chocolate','barra','snack','palomitas',
+    'popcorn','nachos','galleta salada','crackers','tostadas saladas','canchita',
+    'mix de nueces','frutos secos',
+  ],
+  'Congelados': [
+    'pizza congelada','nugget','croqueta','lasaña congelada','verdura congelada',
+    'papas precocidas','empanada congelada','congelado','frozen','hamburguesa congelada',
+    'bastones de pescado','sorbet','smoothie bowl',
+  ],
+};
+
+const _norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+export const detectarCategoria = (nombre) => {
+  const n = _norm(nombre);
+  for (const [cat, kws] of Object.entries(CAT_KEYWORDS)) {
+    if (kws.some(kw => n.includes(_norm(kw)))) return cat;
+  }
+  return 'Otros';
+};
+
 // ─── Iconos ──────────────────────────────────────────────────────────────────
 export const Ico = {
   Plus:    ({ s=20, c='currentColor', w=1.8 }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke={c} strokeWidth={w} strokeLinecap="round"/></svg>,

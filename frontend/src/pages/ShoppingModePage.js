@@ -24,8 +24,9 @@ export default function ShoppingModePage() {
   const [advancing,  setAdvancing]  = useState(false);
   const [apiError,   setApiError]   = useState(null);
   const [loading,    setLoading]    = useState(true);
-  const [precio,     setPrecio]     = useState('');
-  const [precioAcum, setPrecioAcum] = useState(0);
+  const [precio,      setPrecio]      = useState('');
+  const [precioAcum,  setPrecioAcum]  = useState(0);
+  const [itemImages,  setItemImages]  = useState({});
 
   useEffect(() => {
     const load = async () => {
@@ -53,6 +54,17 @@ export default function ShoppingModePage() {
       setMonto(String(precioAcum.toFixed(2)));
     }
   }, [done]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Busca imagen en Wikipedia cuando cambia el ítem actual
+  useEffect(() => {
+    const articulo = items[currentIdx]?.articulo;
+    if (!articulo || itemImages.hasOwnProperty(articulo)) return;
+    const query = encodeURIComponent(articulo.toLowerCase());
+    fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${query}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setItemImages(prev => ({ ...prev, [articulo]: d.thumbnail?.source || null })))
+      .catch(() => setItemImages(prev => ({ ...prev, [articulo]: null })));
+  }, [currentIdx, items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advance = (precioActual = '') => {
     const parsed = parseFloat(precioActual);
@@ -111,6 +123,7 @@ export default function ShoppingModePage() {
   const total     = items.length;
   const pct       = total > 0 ? (currentIdx / total) * 100 : 0;
   const catEmoji  = item ? (CAT_META[item.categoria]?.emoji || '🛒') : '🛒';
+  const itemImg   = item ? itemImages[item.articulo] : undefined;
 
   return (
     <div style={{
@@ -178,9 +191,30 @@ export default function ShoppingModePage() {
             alignItems: 'center', justifyContent: 'center',
             padding: '32px 32px 0',
           }}>
-            {/* Emoji categoría */}
-            <div style={{ fontSize: 96, lineHeight: 1, marginBottom: 24 }}>
-              {catEmoji}
+            {/* Imagen del producto o emoji de categoría */}
+            <div style={{ width: 160, height: 160, marginBottom: 24, position: 'relative' }}>
+              {itemImg ? (
+                <img
+                  src={itemImg}
+                  alt={item.articulo}
+                  style={{
+                    width: 160, height: 160, objectFit: 'cover',
+                    borderRadius: 24, display: 'block',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 160, height: 160, borderRadius: 24,
+                  background: 'rgba(255,255,255,0.07)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 80, lineHeight: 1,
+                }}>
+                  {itemImages.hasOwnProperty(item.articulo) ? catEmoji : (
+                    <Spinner size={36} color={MUSTARD} />
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Nombre */}

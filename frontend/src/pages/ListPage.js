@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { listsAPI, itemsAPI, catalogAPI } from '../api';
-import { CATEGORIAS, CAT_META, Ico, Spinner } from '../theme';
+import { CATEGORIAS, CAT_META, Ico, Spinner, detectarCategoria } from '../theme';
 import AAvatar from '../components/ui/AAvatar';
 
 const AVATAR_COLORS = ['#C76A4D', '#6B7A4D', '#D9A04A', '#8E5B8C', '#5A8FA8', '#7A6A5C'];
@@ -94,7 +94,13 @@ export default function ListPage() {
   };
 
   const handleArticuloChange = useCallback((value) => {
-    setForm(f => ({ ...f, articulo: value }));
+    const catDetectada = value.length >= 2 ? detectarCategoria(value) : 'Otros';
+    setForm(f => ({
+      ...f,
+      articulo: value,
+      categoria: f.categoria === 'Otros' || f._autocat ? catDetectada : f.categoria,
+      _autocat: catDetectada !== 'Otros',
+    }));
     if (value.length >= 2) {
       setSuggestions(
         catalog.filter(c => c.articulo.toLowerCase().includes(value.toLowerCase())).slice(0, 6)
@@ -152,8 +158,9 @@ export default function ListPage() {
     voiceModeRef.current = false;
     setVoiceMode(false);
     setAdding(true);
+    const categoria = form.categoria !== 'Otros' ? form.categoria : detectarCategoria(form.articulo.trim());
     try {
-      const res = await itemsAPI.add(id, form.articulo.trim(), form.cantidad, form.categoria, form.agregado_por);
+      const res = await itemsAPI.add(id, form.articulo.trim(), form.cantidad, categoria, form.agregado_por);
       setItems(prev => [...prev, res.data]);
       setStats(prev => {
         const total = prev.total + 1;
@@ -162,10 +169,10 @@ export default function ListPage() {
       const nuevoArticulo = form.articulo.trim();
       setCatalog(prev => {
         if (prev.some(c => c.articulo.toLowerCase() === nuevoArticulo.toLowerCase())) return prev;
-        return [...prev, { articulo: nuevoArticulo, categoria: form.categoria }]
+        return [...prev, { articulo: nuevoArticulo, categoria }]
           .sort((a, b) => a.articulo.toLowerCase().localeCompare(b.articulo.toLowerCase()));
       });
-      setForm(f => ({ ...f, articulo: '', cantidad: '1', categoria: 'Otros' }));
+      setForm(f => ({ ...f, articulo: '', cantidad: '1', categoria: 'Otros', _autocat: false }));
       setSuggestions([]);
     } catch {
       setError('Error al agregar artículo');
