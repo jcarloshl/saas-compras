@@ -16,6 +16,7 @@ const CatalogPage        = React.lazy(() => import('./pages/CatalogPage'));
 const FamilyPage         = React.lazy(() => import('./pages/FamilyPage'));
 const BudgetPage         = React.lazy(() => import('./pages/BudgetPage'));
 const ProductDetailPage  = React.lazy(() => import('./pages/ProductDetailPage'));
+const RecipesPage        = React.lazy(() => import('./pages/RecipesPage'));
 
 const Fallback = () => (
   <div style={{
@@ -52,6 +53,7 @@ function App() {
               <Route path="/family" element={<ProtectedRoute><FamilyPage /></ProtectedRoute>} />
               <Route path="/budget" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
               <Route path="/product/:articulo" element={<ProtectedRoute><ProductDetailPage /></ProtectedRoute>} />
+              <Route path="/recipes" element={<ProtectedRoute><RecipesPage /></ProtectedRoute>} />
               <Route path="/" element={<Navigate to="/dashboard" />} />
             </Routes>
           </React.Suspense>

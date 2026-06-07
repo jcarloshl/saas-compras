@@ -106,6 +106,13 @@ export const budgetAPI = {
   delete: (id) => api.delete(`/api/budget/${id}`),
 };
 
+// Recipes API
+export const recipesAPI = {
+  search:  (q) => api.get('/api/recipes/search', { params: { q } }),
+  get:     (id) => api.get(`/api/recipes/${id}`),
+  toList:  (label, ingredientes) => api.post('/api/recipes/to-list', { label, ingredientes }),
+};
+
 // Stats API
 export const statsAPI = {
   getArticulo: (nombre) =>

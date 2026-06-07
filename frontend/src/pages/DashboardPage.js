@@ -17,7 +17,7 @@ function loadCache() { try { return JSON.parse(sessionStorage.getItem(CACHE_KEY)
 function saveCache(data) { try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch {} }
 
 function catEmoji(name) { return CAT_META[name]?.emoji || '📦'; }
-function formatMonto(val) { return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+function formatMonto(val) { return Number(val).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function formatDate(iso) { return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }); }
 
 function greeting() {
@@ -234,20 +234,22 @@ export default function DashboardPage() {
             <div style={{ fontSize: 11.5, color: T.muted, textAlign: 'left' }}>Ver lo que compraste</div>
           </button>
 
-          {/* Card 3: Próximamente */}
-          <div
+          {/* Card 3: Recetas */}
+          <button
+            onClick={() => navigate('/recipes')}
             style={{
               scrollSnapAlign: 'start',
               flexShrink: 0, width: 160,
               background: tileBg(dark, 3),
               borderRadius: 20, padding: 16,
               display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8,
+              border: 'none', cursor: 'pointer', textAlign: 'left',
             }}
           >
-            <div style={{ fontSize: 26 }}>✨</div>
+            <div style={{ fontSize: 26 }}>🍽</div>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>Recetas</div>
-            <div style={{ fontSize: 11.5, color: T.muted }}>Próximamente</div>
-          </div>
+            <div style={{ fontSize: 11.5, color: T.muted }}>Buscar e importar</div>
+          </button>
         </div>
       </div>
 

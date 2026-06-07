@@ -51,7 +51,7 @@ export default function ShoppingModePage() {
 
   useEffect(() => {
     if (done && precioAcum > 0 && monto === '') {
-      setMonto(String(precioAcum.toFixed(2)));
+      setMonto(String(Math.round(precioAcum)));
     }
   }, [done]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -318,7 +318,7 @@ export default function ShoppingModePage() {
               ¿Cuánto gastaste en total?
               {precioAcum > 0 && (
                 <div style={{ fontSize: 12, color: PRIMARY, marginTop: 4 }}>
-                  Suma ingresada: ${precioAcum.toFixed(2)}
+                  Suma ingresada: ${Math.round(precioAcum).toLocaleString('es-CL')}
                 </div>
               )}
             </div>

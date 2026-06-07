@@ -873,6 +873,157 @@ def delete_budget(user_id, budget_id):
     return jsonify({'message': 'Presupuesto eliminado'}), 200
 
 
+# ─────────────────────────────────────────────
+#  RECIPES ROUTES
+# ─────────────────────────────────────────────
+
+def _cat_from_ingredient(text):
+    import unicodedata
+    def _norm(s):
+        return unicodedata.normalize('NFD', s.lower()).encode('ascii', 'ignore').decode()
+    tn = _norm(text)
+    for cat, keywords in app.config.get('INGREDIENT_CATEGORIES', {}).items():
+        if any(_norm(kw) in tn for kw in keywords):
+            return cat
+    return 'Otros'
+
+
+@app.route('/api/recipes/search', methods=['GET'])
+@token_required
+def recipes_search(user_id):
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'error': 'q es requerido'}), 400
+
+    app_id  = app.config.get('EDAMAM_APP_ID')
+    app_key = app.config.get('EDAMAM_APP_KEY')
+    if not app_id or not app_key:
+        return jsonify({'error': 'Edamam no configurado', 'code': 'no_credentials'}), 503
+
+    try:
+        resp = requests.get(
+            'https://api.edamam.com/search',
+            params={'q': q, 'type': 'recipe', 'app_id': app_id, 'app_key': app_key, 'to': 20},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return jsonify({'error': 'Error al contactar Edamam'}), 502
+
+    results = []
+    for hit in data.get('hits', []):
+        r = hit.get('recipe', {})
+        uri = r.get('uri', '')
+        recipe_id = uri.split('#recipe_')[-1] if '#recipe_' in uri else ''
+        results.append({
+            'id': recipe_id,
+            'label': r.get('label', ''),
+            'image': r.get('image', ''),
+            'source': r.get('source', ''),
+            'ingredientLines': r.get('ingredientLines', []),
+        })
+
+    return jsonify({'results': results, 'total': len(results)}), 200
+
+
+@app.route('/api/recipes/<recipe_id>', methods=['GET'])
+@token_required
+def recipes_get(user_id, recipe_id):
+    app_id  = app.config.get('EDAMAM_APP_ID')
+    app_key = app.config.get('EDAMAM_APP_KEY')
+    if not app_id or not app_key:
+        return jsonify({'error': 'Edamam no configurado', 'code': 'no_credentials'}), 503
+
+    try:
+        resp = requests.get(
+            'https://api.edamam.com/search',
+            params={
+                'r': f'http://www.edamam.com/ontologies/edamam.owl#recipe_{recipe_id}',
+                'type': 'recipe',
+                'app_id': app_id,
+                'app_key': app_key,
+            },
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return jsonify({'error': 'Error al contactar Edamam'}), 502
+
+    # Con r= el API devuelve una lista directa de objetos recipe
+    if isinstance(data, list):
+        if not data:
+            return jsonify({'error': 'Receta no encontrada'}), 404
+        r = data[0]
+    else:
+        hits = data.get('hits', [])
+        if not hits:
+            return jsonify({'error': 'Receta no encontrada'}), 404
+        r = hits[0].get('recipe', {})
+
+    ingredientes = []
+    for ing in r.get('ingredients', []):
+        food = ing.get('food', '').strip()
+        if not food:
+            continue
+        qty = ing.get('quantity') or 1
+        try:
+            qty_f = float(qty)
+            cantidad = str(int(qty_f)) if qty_f == int(qty_f) else str(round(qty_f, 2))
+        except (TypeError, ValueError):
+            cantidad = '1'
+        ingredientes.append({
+            'articulo':  food,
+            'cantidad':  cantidad,
+            'categoria': _cat_from_ingredient(food),
+        })
+
+    return jsonify({
+        'id': recipe_id,
+        'label': r.get('label', ''),
+        'image': r.get('image', ''),
+        'source': r.get('source', ''),
+        'ingredientes': ingredientes,
+    }), 200
+
+
+@app.route('/api/recipes/to-list', methods=['POST'])
+@token_required
+def recipes_to_list(user_id):
+    data = request.get_json() or {}
+    label        = (data.get('label') or 'Receta').strip() or 'Receta'
+    ingredientes = data.get('ingredientes', [])
+
+    if not ingredientes:
+        return jsonify({'error': 'Sin ingredientes'}), 400
+
+    lst = ShoppingList(name=label, user_id=user_id)
+    db.session.add(lst)
+    db.session.flush()
+
+    count = 0
+    for ing in ingredientes:
+        articulo  = (ing.get('articulo') or '').strip()
+        cantidad  = str(ing.get('cantidad') or '1').strip() or '1'
+        categoria = ing.get('categoria') or 'Otros'
+        if not articulo:
+            continue
+        db.session.add(ShoppingItem(
+            articulo=articulo, cantidad=cantidad,
+            categoria=categoria, list_id=lst.id, comprado=False,
+        ))
+        existing = CatalogItem.query.filter_by(user_id=user_id, articulo=articulo).first()
+        if not existing:
+            db.session.add(CatalogItem(user_id=user_id, articulo=articulo, categoria=categoria))
+        elif existing.categoria != categoria:
+            existing.categoria = categoria
+        count += 1
+
+    db.session.commit()
+    return jsonify({'list_id': lst.id, 'items_count': count}), 201
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""

@@ -13,7 +13,7 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 function formatMonto(val) {
-  return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(val).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 export default function ListPage() {

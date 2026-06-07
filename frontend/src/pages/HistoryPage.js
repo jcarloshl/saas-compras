@@ -22,7 +22,7 @@ function formatDate(iso) {
 }
 
 function formatMonto(val) {
-  return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(val).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 export default function HistoryPage() {
