@@ -55,6 +55,8 @@ Production env vars (Railway):
 | `FRONTEND_URL` | Frontend URL for password reset links |
 | `BREVO_API_KEY` | Brevo transactional email API key (HTTPS — Railway blocks SMTP) |
 | `EMAIL_REMITENTE` | Sender address verified in Brevo (e.g. your Gmail) |
+| `EDAMAM_APP_ID` | Edamam Recipe Search API app ID (free tier, 5 000 req/month) |
+| `EDAMAM_APP_KEY` | Edamam Recipe Search API key |
 
 Without `BREVO_API_KEY`, `forgot-password` still works — the reset link is printed to server logs.
 
@@ -64,10 +66,10 @@ Without `BREVO_API_KEY`, `forgot-password` still works — the reset link is pri
 
 Flat Flask app — no blueprints. All routes live in `app.py`.
 
-- `config.py` — Config classes selected by `FLASK_ENV`: `DevelopmentConfig` (SQLite), `ProductionConfig` (PostgreSQL via `DATABASE_URL`), `TestingConfig` (in-memory SQLite). Railway's `postgres://` URLs are rewritten to `postgresql://` here. Also defines `CATEGORIAS` (11 fixed categories) and `FRONTEND_URL`.
-- `models.py` — Seven SQLAlchemy models: `User → ShoppingList → ShoppingItem` (cascading deletes), `PurchaseHistory` (standalone, no cascade), `CatalogItem` (user_id + articulo unique per user), `FamilyMember` (up to 5 per user, has `nombre` + `color`), and `Budget` (unique per user+mes, `mes` format `YYYY-MM`). `ShoppingList.monto_total` (Float, nullable) records the total spent on a shopping trip — captured from `ShoppingModePage`, not `DashboardPage`. `CatalogItem` is upserted automatically when an item is added to a list. `PurchaseHistory` is written when `comprado` is toggled `true` in the PUT endpoint (not on reset). `PurchaseHistory.list_id` is a plain `Integer` with **no FK constraint** — history is preserved when a list is deleted. `_es_comprado()` is defined but never called (dead code).
+- `config.py` — Config classes selected by `FLASK_ENV`: `DevelopmentConfig` (SQLite), `ProductionConfig` (PostgreSQL via `DATABASE_URL`), `TestingConfig` (in-memory SQLite). Railway's `postgres://` URLs are rewritten to `postgresql://` here. Also defines `CATEGORIAS` (11 fixed categories), `FRONTEND_URL`, `EDAMAM_APP_ID/KEY`, and `INGREDIENT_CATEGORIES` (keyword dict — bilingual EN+ES — used by `_cat_from_ingredient()` to map ingredient names → project categories).
+- `models.py` — Seven SQLAlchemy models: `User → ShoppingList → ShoppingItem` (cascading deletes), `PurchaseHistory` (standalone, no cascade), `CatalogItem` (user_id + articulo unique per user), `FamilyMember` (up to 5 per user, has `nombre` + `color`), and `Budget` (unique per user+mes, `mes` format `YYYY-MM`). `ShoppingList.monto_total` (Float, nullable) records the total spent on a shopping trip — captured from `ShoppingModePage`. `ShoppingItem.precio` (Float, nullable) and `PurchaseHistory.precio` (Float, nullable) store the price paid per unit, entered optionally in `ShoppingModePage`. `CatalogItem` is upserted automatically when an item is added to a list. `PurchaseHistory` is written when `comprado` is toggled `true` in the PUT endpoint (not on reset). `PurchaseHistory.list_id` is a plain `Integer` with **no FK constraint** — history is preserved when a list is deleted. `_es_comprado()` is defined but never called (dead code).
 - `auth.py` — Manual JWT via PyJWT. `@token_required` decorator injects `user_id` as first arg. Tokens expire in 30 days.
-- `app.py` — All REST routes. Multi-tenancy enforced by checking `lst.user_id == user_id` before every operation. Contains `_calcular_sugeridos(user_id)` private helper.
+- `app.py` — All REST routes. Multi-tenancy enforced by checking `lst.user_id == user_id` before every operation. Private helpers: `_calcular_sugeridos(user_id)`, `_cat_from_ingredient(text)`, `_translate_foods_es(foods)`.
 
 ### Backend Route Map
 
@@ -86,7 +88,7 @@ DELETE /api/lists/<id>
 
 GET    /api/lists/<id>/items                 returns { items: [...], stats: {...} }
 POST   /api/lists/<id>/items
-PUT    /api/lists/<id>/items/<item_id>       fields: comprado, cantidad, categoria, agregado_por
+PUT    /api/lists/<id>/items/<item_id>       fields: comprado, cantidad, categoria, agregado_por, precio
 DELETE /api/lists/<id>/items/<item_id>
 POST   /api/lists/<id>/reset
 GET    /api/lists/<id>/catalog               CatalogItem entries + ShoppingItem fallbacks
@@ -113,6 +115,20 @@ GET    /api/budget?mes=YYYY-MM               returns { id, monto_limite, gasto_a
 POST   /api/budget                           upsert { mes, monto_limite } — float() validated, 400 on bad input
 DELETE /api/budget/<id>                      ownership-checked delete
 
+GET    /api/recipes/search                   @token_required — ?q= — calls Edamam v2; returns { results: [...], total }
+                                             results: [{ id, label, image, source, ingredientLines,
+                                             ingredientes: [{ articulo, cantidad, categoria }] }]
+                                             articulo is translated to Spanish via _translate_foods_es().
+                                             503 if EDAMAM_APP_ID/KEY not set
+
+GET    /api/recipes/<recipe_id>              @token_required — detail via Edamam v2 /api/recipes/v2/{id}
+                                             returns { id, label, image, source, ingredientes: [...] }
+                                             NOT called by RecipesPage (ingredientes already in search results)
+
+POST   /api/recipes/to-list                  @token_required — body: { label, ingredientes }
+                                             creates ShoppingList + ShoppingItems + upserts CatalogItems
+                                             returns { list_id, items_count }
+
 GET    /api/stats/articulo                   ?nombre= — purchase history stats for one article
                                              returns { total_veces, veces_este_anio, dias_desde_ultima,
                                              quien_anade_mas[{nombre, count, porcentaje}],
@@ -131,6 +147,16 @@ JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (la
 
 `_calcular_sugeridos(user_id)` analyzes the 4 complete ISO weeks before the current week. An article is included **only if it appears in all 4 weeks** (100% recurrence). `POST /api/suggested-list` checks for an existing "Mercado Semanal" in the current ISO week before creating (returns 409 with `list_id` if duplicate). The frontend button is disabled on non-Monday days.
 
+### Recetas (Edamam integration)
+
+Uses **Edamam Recipe Search API v2** (`https://api.edamam.com/api/recipes/v2`). The v1 endpoint (`api.edamam.com/search`) is deprecated and returns 404 — do not use it.
+
+`GET /api/recipes/search` calls v2 with `type=public`, extracts the recipe `id` from the `uri` field (`#recipe_XXXX`), then translates all `food` names from English to Spanish via `_translate_foods_es()`. Translation uses the free Google Translate endpoint (`translate.googleapis.com/translate_a/single`) with no API key — all food names for one recipe are joined with `\n` in a single request. Falls back to English on error. The categorization via `_cat_from_ingredient()` runs on the **translated** Spanish name, which improves accuracy since `INGREDIENT_CATEGORIES` has Spanish keywords.
+
+`GET /api/recipes/<id>` calls `https://api.edamam.com/api/recipes/v2/{id}?type=public` and returns `{ recipe: {...} }` (single object, not a list). This endpoint exists but **is not called by the frontend** — `RecipesPage` uses `ingredientes` from the search results directly.
+
+`POST /api/recipes/to-list` creates the list, items, and upserts the catalog in a single transaction. Without `EDAMAM_APP_ID/KEY`, search and to-list endpoints return `503 { code: 'no_credentials' }`.
+
 ### Frontend (`frontend/src/`)
 
 **No Bootstrap.** All styling uses inline styles. Design system lives in `theme.js` and `contexts/ThemeContext.js`. Google Fonts (Newsreader + Manrope) loaded in `public/index.html`.
@@ -145,6 +171,7 @@ JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (la
 - `CAT_META` — `{ emoji, color }` per category.
 - `Ico` — SVG icon components called as `<Ico.Plus s={18} c="#fff" w={2}/>`. Available: `Plus`, `Check`, `X`, `ChevL`, `ChevR`, `Clock`, `Grid`, `Sparkle`, `Search`, `Trash`, `Edit`, `List`, `Bell`, `People`, `Mic`, `Dots`, `Heart` (prop `filled`), `Camera`, `Wallet`.
 - `Spinner` — `<Spinner size={18} color="#fff"/>`.
+- `formatMonto(val)` — formats a number using `es-CL` locale with no decimals (e.g. `1.234`).
 
 #### ThemeContext (`contexts/ThemeContext.js`)
 
@@ -168,11 +195,11 @@ Bottom-sheet that asks "¿Quién eres?" when no active family member is selected
 
 #### BottomTabBar (`components/BottomTabBar.js`)
 
-4 tabs: Listas → `/dashboard`, Categorías → `/catalog`, Historial → `/history`, Familia → `/family`. Uses `useTheme()` internally. `position: fixed, bottom: 0`. Pages that show it set `paddingBottom: 120`. **Not used** in detail pages (`ListPage`, `ShoppingModePage`, `ProductDetailPage`, `BudgetPage`, `FamilyPage`).
+4 tabs: Listas → `/dashboard`, Categorías → `/catalog`, Historial → `/history`, Familia → `/family`. Uses `useTheme()` internally. `position: fixed, bottom: 0`. Pages that show it set `paddingBottom: 120`. **Not used** in detail pages (`ListPage`, `ShoppingModePage`, `ProductDetailPage`, `BudgetPage`, `FamilyPage`, `RecipesPage`).
 
 #### api.js
 
-Single Axios instance. Request interceptor injects `Bearer` token. Response interceptor redirects to `/login` on 401. Exports nine named API objects: `authAPI`, `listsAPI`, `itemsAPI`, `historyAPI`, `suggestedAPI`, `catalogAPI`, `statsAPI`, `familyAPI`, `budgetAPI`.
+Single Axios instance. Request interceptor injects `Bearer` token. Response interceptor redirects to `/login` on 401. Exports ten named API objects: `authAPI`, `listsAPI`, `itemsAPI`, `historyAPI`, `suggestedAPI`, `catalogAPI`, `recipesAPI`, `statsAPI`, `familyAPI`, `budgetAPI`.
 
 #### App.js — routes
 
@@ -191,17 +218,19 @@ All pages are lazy-loaded. Routes:
 | `/family` | FamilyPage | Yes |
 | `/budget` | BudgetPage | Yes |
 | `/product/:articulo` | ProductDetailPage | Yes |
+| `/recipes` | RecipesPage | Yes |
 
 #### Page summary
 
-- **DashboardPage** — greeting header shows active family member name (from `localStorage('cesta_member')`) with "Cambiar" link + dark-mode toggle + `Ico.Wallet` (→ `/budget`) + avatar (logout); shows `MemberPicker` on load if no member saved and members exist; delete confirmation uses a custom bottom-sheet modal (`confirmDeleteId` state) instead of `window.confirm`; new lists are inserted at the front of the array; "Nueva lista" button sits inline next to the "Listas activas" title; horizontal carousel "Para ti, hoy"; list cards with `tileBg` + `AProgressBar` + `monto_total` (read-only, no decimals). `BottomTabBar active="home"`.
+- **DashboardPage** — greeting header shows active family member name (from `localStorage('cesta_member')`) with "Cambiar" link + dark-mode toggle + `Ico.Wallet` (→ `/budget`) + avatar (logout); shows `MemberPicker` on load if no member saved and members exist; delete confirmation uses a custom bottom-sheet modal (`confirmDeleteId` state) instead of `window.confirm`; new lists are inserted at the front of the array; "Nueva lista" button sits inline next to the "Listas activas" title; horizontal carousel "Para ti, hoy" has 3 cards: Mercado Semanal (Monday-only, opens modal), Historial reciente (→ `/history`), Recetas (→ `/recipes`); list cards with `tileBg` + `AProgressBar` + `monto_total` (read-only, no decimals, `es-CL` locale). `BottomTabBar active="home"`.
 - **ListPage** — `ChevL` → `/dashboard`; "Comprar" button → `/lists/:id/shop`; creation date + `monto_total` chip (read-only); items grouped by category with uppercase headers; `AAvatar` for `agregado_por` on pending items. `agregado_por` is sourced from `localStorage.getItem('cesta_member')?.nombre || user?.username` — there is no manual input field for it. Floating bar has two zones: text area (opens form) + mic circle (activates voice mode). Voice mode: `voiceModeRef` (ref) + `voiceMode` (state) pair; when active, final speech results auto-submit via `submitByVoice()` which calls `itemsAPI.add`, shows a toast, and restarts recognition. `submitByVoiceRef` avoids stale closure. A banner inside the form shows "Modo dictado activo" with "Detener" button. `handleArticuloChange` is wrapped in `useCallback` (dependency of `startListening`). `handleToggle` reverts both `items` AND `stats` on API failure (`prevStats` captured before optimistic update). Autocomplete uses `catalogAPI.getAll()` (not `itemsAPI.getCatalog`).
-- **ShoppingModePage** — fullscreen dark gradient (`#2A1F18 → #3F2B1F`) regardless of theme; shows pending items one by one; `advance()` helper shared by "No hay" (no API call) and "Tachar y seguir" (calls `itemsAPI.update`, only advances on success); lists with no pending items go straight to the completion screen; completion screen captures `monto_total` and saves via `listsAPI.update(id, { monto_total })` directly.
+- **ShoppingModePage** — fullscreen dark gradient (`#2A1F18 → #3F2B1F`) regardless of theme; shows pending items one by one. Each item shows a Wikipedia image (fetched per-item via `es.wikipedia.org/api/rest_v1/page/summary/`; `itemImages` dict caches results, falls back to category emoji). Optional `precio` input per item; `advance(precioActual)` accumulates into `precioAcum`. `advance()` is shared by "No hay" (skips, no API call) and "Tachar y seguir" (sends `{ comprado: true, precio? }` to `itemsAPI.update`, only advances on success). Lists with no pending items go straight to the completion screen. Completion screen shows the `monto` input pre-filled with `Math.round(precioAcum)` (if prices were entered) and saves via `listsAPI.update(id, { monto_total })`.
 - **HistoryPage** — period selector inline below title; monthly spend card (→ `/budget`) shown when `monto_total_periodo > 0`; items grouped by category. `BottomTabBar active="hist"`.
 - **CatalogPage** — default grid view (2-col by category using `tileBg`); toggle to list view (`Ico.List`/`Ico.Grid`); pressing a category in grid filters list view; each row in list view navigates to `/product/:articulo`; edit/delete buttons wrapped in `onClick={e => e.stopPropagation()}` div. `BottomTabBar active="cat"`.
 - **ProductDetailPage** — loads `statsAPI.getArticulo(decodeURIComponent(articulo))`; re-fetches if `:articulo` param changes; hero with emoji + category + "Recurrente" badge (if `semanas_distintas > 2`); 3-col stats grid (Total, Este Año, Última); horizontal percentage bars for `quien_anade_mas`; "Volver al catálogo" uses `navigate('/catalog', { replace: true })` to avoid adding a back-stack entry.
 - **FamilyPage** — CRUD for up to 5 family members. Each member has `nombre` + `color` (color picker). "Soy yo" button saves the member to `localStorage('cesta_member')` and navigates to `/dashboard`. Edit inline; delete with confirmation dialog.
 - **BudgetPage** — month selector (last 6 months); main card shows gasto vs. límite with `AProgressBar` + alert if ≥80%; "Definir límite" / "Editar" opens a bottom-sheet modal; category breakdown shows item counts (not amounts — labeled as "estimación"); yellow warning banner when `advertencia_listas_sin_monto` is true (lists without `monto_total` in that month).
+- **RecipesPage** — `ChevL` → `/dashboard`; search input + submit calls `recipesAPI.search(q)`; results in 2-col image grid; tapping a card opens a bottom-sheet with `ingredientLines` (human-readable, English from Edamam) + "Crear lista de compras" button; button calls `recipesAPI.toList(selected.label, selected.ingredientes)` directly — `ingredientes` (in Spanish) come from the search results, no second API call needed. Returns 503 with `code: 'no_credentials'` if Edamam env vars are missing.
 
 ### Design system conventions
 
@@ -210,6 +239,7 @@ All pages are lazy-loaded. Routes:
 - `App.css`: `@keyframes cesta-spin` (Spinner), global `box-sizing: border-box`, `input:focus` ring in terracotta, `.scroll-x` scrollbar-hiding class.
 - Category pills: `background: '#F1E5D2'` consistently.
 - iOS safe area: `paddingBottom: 'calc(Xpx + env(safe-area-inset-bottom, 0px))'` in fixed bottom elements.
+- All user-facing text in Latin American Spanish (tuteo, not voseo argentino).
 
 ### ListPage data loading pattern
 
@@ -248,6 +278,7 @@ See `DOCKER.md` for NAS-specific setup.
 - All API routes prefixed `/api/`. Health check at `/health`.
 - `CATEGORIAS` must stay in sync between `backend/config.py` and `frontend/src/theme.js` (11 categories). When modifying: update both files + `CAT_META` in `theme.js`.
 - `comprado` (boolean) — purchase state on `ShoppingItem`.
+- `precio` (Float, nullable) — optional price per unit on `ShoppingItem` and `PurchaseHistory`. Set in `ShoppingModePage` when the user enters a price. Accumulated into `precioAcum` to pre-fill `monto_total`.
 - `agregado_por` — auto-populated from `localStorage('cesta_member').nombre` (active family member) or `user.username` as fallback. No manual input field exists in `ListPage`.
 - `localStorage` keys: `cesta_dark` (theme), `cesta_member` (active family member object `{id, nombre, color}`), `token` (JWT), `user` (user object), `dashboard_lists` (list cache).
 - `monto_total` — captured by `ShoppingModePage` at end of shopping trip via `listsAPI.update(id, { monto_total })`. Not editable in `DashboardPage` or `ListPage` (read-only display only).
