@@ -888,6 +888,24 @@ def _cat_from_ingredient(text):
     return 'Otros'
 
 
+def _translate_foods_es(foods):
+    """Traduce nombres de alimentos de inglés a español usando Google Translate gratuito."""
+    if not foods:
+        return []
+    try:
+        resp = requests.get(
+            'https://translate.googleapis.com/translate_a/single',
+            params={'client': 'gtx', 'sl': 'en', 'tl': 'es', 'dt': 't', 'q': '\n'.join(foods)},
+            timeout=6,
+        )
+        resp.raise_for_status()
+        translated = ''.join(seg[0] for seg in resp.json()[0] if seg[0])
+        parts = [p.strip() for p in translated.split('\n')]
+        return parts if len(parts) == len(foods) else foods
+    except Exception:
+        return foods
+
+
 @app.route('/api/recipes/search', methods=['GET'])
 @token_required
 def recipes_search(user_id):
@@ -919,11 +937,10 @@ def recipes_search(user_id):
         r = hit.get('recipe', {})
         uri = r.get('uri', '')
         recipe_id = uri.split('#recipe_')[-1] if '#recipe_' in uri else ''
+        raw_ings = [ing for ing in r.get('ingredients', []) if ing.get('food', '').strip()]
+        foods_es = _translate_foods_es([ing['food'].strip() for ing in raw_ings])
         ingredientes = []
-        for ing in r.get('ingredients', []):
-            food = ing.get('food', '').strip()
-            if not food:
-                continue
+        for ing, food_es in zip(raw_ings, foods_es):
             qty = ing.get('quantity') or 1
             try:
                 qty_f = float(qty)
@@ -931,9 +948,9 @@ def recipes_search(user_id):
             except (TypeError, ValueError):
                 cantidad = '1'
             ingredientes.append({
-                'articulo':  food,
+                'articulo':  food_es,
                 'cantidad':  cantidad,
-                'categoria': _cat_from_ingredient(food),
+                'categoria': _cat_from_ingredient(food_es),
             })
         results.append({
             'id': recipe_id,
