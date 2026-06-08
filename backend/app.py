@@ -919,12 +919,29 @@ def recipes_search(user_id):
         r = hit.get('recipe', {})
         uri = r.get('uri', '')
         recipe_id = uri.split('#recipe_')[-1] if '#recipe_' in uri else ''
+        ingredientes = []
+        for ing in r.get('ingredients', []):
+            food = ing.get('food', '').strip()
+            if not food:
+                continue
+            qty = ing.get('quantity') or 1
+            try:
+                qty_f = float(qty)
+                cantidad = str(int(qty_f)) if qty_f == int(qty_f) else str(round(qty_f, 2))
+            except (TypeError, ValueError):
+                cantidad = '1'
+            ingredientes.append({
+                'articulo':  food,
+                'cantidad':  cantidad,
+                'categoria': _cat_from_ingredient(food),
+            })
         results.append({
             'id': recipe_id,
             'label': r.get('label', ''),
             'image': r.get('image', ''),
             'source': r.get('source', ''),
             'ingredientLines': r.get('ingredientLines', []),
+            'ingredientes': ingredientes,
         })
 
     return jsonify({'results': results, 'total': len(results)}), 200

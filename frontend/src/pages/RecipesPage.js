@@ -45,9 +45,7 @@ export default function RecipesPage() {
     setCreating(true);
     setCreateError('');
     try {
-      const detailRes = await recipesAPI.get(selected.id);
-      const { label, ingredientes } = detailRes.data;
-      const createRes = await recipesAPI.toList(label, ingredientes);
+      const createRes = await recipesAPI.toList(selected.label, selected.ingredientes || []);
       navigate(`/lists/${createRes.data.list_id}`);
     } catch {
       setCreateError('Error al crear la lista. Intenta de nuevo.');
