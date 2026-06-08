@@ -902,14 +902,17 @@ def recipes_search(user_id):
 
     try:
         resp = requests.get(
-            'https://api.edamam.com/search',
-            params={'q': q, 'type': 'recipe', 'app_id': app_id, 'app_key': app_key, 'to': 20},
+            'https://api.edamam.com/api/recipes/v2',
+            params={'type': 'public', 'q': q, 'app_id': app_id, 'app_key': app_key, 'to': 20},
             timeout=8,
         )
         resp.raise_for_status()
         data = resp.json()
     except Exception:
         return jsonify({'error': 'Error al contactar Edamam'}), 502
+
+    if data.get('status') == 'error':
+        return jsonify({'error': data.get('message', 'Error Edamam')}), 502
 
     results = []
     for hit in data.get('hits', []):
@@ -937,13 +940,8 @@ def recipes_get(user_id, recipe_id):
 
     try:
         resp = requests.get(
-            'https://api.edamam.com/search',
-            params={
-                'r': f'http://www.edamam.com/ontologies/edamam.owl#recipe_{recipe_id}',
-                'type': 'recipe',
-                'app_id': app_id,
-                'app_key': app_key,
-            },
+            f'https://api.edamam.com/api/recipes/v2/{recipe_id}',
+            params={'type': 'public', 'app_id': app_id, 'app_key': app_key},
             timeout=8,
         )
         resp.raise_for_status()
@@ -951,16 +949,12 @@ def recipes_get(user_id, recipe_id):
     except Exception:
         return jsonify({'error': 'Error al contactar Edamam'}), 502
 
-    # Con r= el API devuelve una lista directa de objetos recipe
-    if isinstance(data, list):
-        if not data:
-            return jsonify({'error': 'Receta no encontrada'}), 404
-        r = data[0]
-    else:
-        hits = data.get('hits', [])
-        if not hits:
-            return jsonify({'error': 'Receta no encontrada'}), 404
-        r = hits[0].get('recipe', {})
+    if data.get('status') == 'error':
+        return jsonify({'error': data.get('message', 'Error Edamam')}), 502
+
+    r = data.get('recipe')
+    if not r:
+        return jsonify({'error': 'Receta no encontrada'}), 404
 
     ingredientes = []
     for ing in r.get('ingredients', []):

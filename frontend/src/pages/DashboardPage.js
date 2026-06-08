@@ -282,7 +282,7 @@ export default function DashboardPage() {
             <div style={{ fontSize: 64, marginBottom: 12 }}>🧺</div>
             <h2 style={{ margin: 0, fontFamily: T.serif, fontWeight: 500, fontSize: 22, letterSpacing: -0.4 }}>Tu cesta está vacía</h2>
             <p style={{ margin: '8px 0 0', fontSize: 13.5, color: T.muted, lineHeight: 1.5, maxWidth: 260 }}>
-              Creá tu primera lista de compras para empezar.
+              Crea tu primera lista de compras para empezar.
             </p>
             <button onClick={() => setShowForm(true)} style={{
               marginTop: 20, padding: '13px 22px', borderRadius: 14,

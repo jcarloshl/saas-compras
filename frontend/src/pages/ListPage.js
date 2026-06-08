@@ -428,8 +428,8 @@ export default function ListPage() {
               </h2>
               <p style={{ margin: '8px 0 0', fontSize: 13.5, color: T.muted, lineHeight: 1.5 }}>
                 {filterCat === 'Todas'
-                  ? 'Tocá el botón de abajo para agregar el primer artículo.'
-                  : 'Cambiá el filtro para ver otros artículos.'}
+                  ? 'Toca el botón de abajo para agregar el primer artículo.'
+                  : 'Cambia el filtro para ver otros artículos.'}
               </p>
             </div>
           ) : (
@@ -612,13 +612,13 @@ export default function ListPage() {
                       }}
                     >
                       <Ico.Mic s={13} c={isListening ? '#fff' : T.muted} w={2}/>
-                      {isListening ? 'Escuchando…' : 'Dictá'}
+                      {isListening ? 'Escuchando…' : 'Dictar'}
                     </button>
                   )}
                 </div>
                 <input
                   type="text" style={{ ...inp, outline: isListening ? `2px solid ${T.primary}` : 'none' }}
-                  placeholder={isListening ? '🎙 Hablá ahora…' : '¿Qué necesitás?'}
+                  placeholder={isListening ? '🎙 Habla ahora…' : '¿Qué necesitas?'}
                   value={form.articulo} onChange={e => handleArticuloChange(e.target.value)}
                   autoFocus={!isListening} required
                 />

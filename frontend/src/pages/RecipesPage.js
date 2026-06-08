@@ -31,9 +31,9 @@ export default function RecipesPage() {
       setSearched(true);
     } catch (err) {
       if (err.response?.data?.code === 'no_credentials') {
-        setSearchError('Las credenciales de Edamam no están configuradas. Agregá EDAMAM_APP_ID y EDAMAM_APP_KEY al entorno.');
+        setSearchError('Las credenciales de Edamam no están configuradas. Agrega EDAMAM_APP_ID y EDAMAM_APP_KEY al entorno.');
       } else {
-        setSearchError('No se pudo buscar. Revisá tu conexión e intentá de nuevo.');
+        setSearchError('No se pudo buscar. Revisa tu conexión e intenta de nuevo.');
       }
     } finally {
       setSearching(false);
@@ -50,7 +50,7 @@ export default function RecipesPage() {
       const createRes = await recipesAPI.toList(label, ingredientes);
       navigate(`/lists/${createRes.data.list_id}`);
     } catch {
-      setCreateError('Error al crear la lista. Intentá de nuevo.');
+      setCreateError('Error al crear la lista. Intenta de nuevo.');
       setCreating(false);
     }
   };
@@ -68,7 +68,7 @@ export default function RecipesPage() {
         </button>
         <div>
           <div style={{ fontFamily: T.serif, fontSize: 22, fontWeight: 500, letterSpacing: -0.4, color: T.ink }}>Recetas</div>
-          <div style={{ fontSize: 12, color: T.muted }}>Buscá y armá tu lista de ingredientes</div>
+          <div style={{ fontSize: 12, color: T.muted }}>Busca y arma tu lista de ingredientes</div>
         </div>
       </div>
 
@@ -116,7 +116,7 @@ export default function RecipesPage() {
           <div style={{ textAlign: 'center', padding: '50px 0' }}>
             <div style={{ fontSize: 48 }}>🍽</div>
             <p style={{ marginTop: 12, fontWeight: 600, fontSize: 16, color: T.ink }}>Sin resultados</p>
-            <p style={{ color: T.muted, fontSize: 13.5 }}>Probá con otro término de búsqueda</p>
+            <p style={{ color: T.muted, fontSize: 13.5 }}>Prueba con otro término de búsqueda</p>
           </div>
         ) : results.length > 0 ? (
           <>
@@ -158,10 +158,10 @@ export default function RecipesPage() {
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: 56 }}>🥘</div>
             <p style={{ marginTop: 14, fontFamily: T.serif, fontSize: 20, fontWeight: 500, color: T.ink, letterSpacing: -0.3 }}>
-              Buscá una receta
+              Busca una receta
             </p>
             <p style={{ color: T.muted, fontSize: 13.5, lineHeight: 1.6, maxWidth: 280, margin: '8px auto 0' }}>
-              Escribí el nombre de un plato y te mostramos los ingredientes para crear tu lista de compras.
+              Escribe el nombre de un plato y te mostramos los ingredientes para crear tu lista de compras.
             </p>
           </div>
         )}
