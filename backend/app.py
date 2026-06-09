@@ -888,22 +888,36 @@ def _cat_from_ingredient(text):
     return 'Otros'
 
 
-def _translate_foods_es(foods):
-    """Traduce nombres de alimentos de inglés a español usando Google Translate gratuito."""
-    if not foods:
-        return []
-    try:
-        resp = requests.get(
-            'https://translate.googleapis.com/translate_a/single',
-            params={'client': 'gtx', 'sl': 'en', 'tl': 'es', 'dt': 't', 'q': '\n'.join(foods)},
-            timeout=6,
-        )
-        resp.raise_for_status()
-        translated = ''.join(seg[0] for seg in resp.json()[0] if seg[0])
-        parts = [p.strip() for p in translated.split('\n')]
-        return parts if len(parts) == len(foods) else foods
-    except Exception:
-        return foods
+def _parse_spoonacular_ingredients(extended_ingredients):
+    """Convierte extendedIngredients de Spoonacular a (ingredientes, ingredient_lines)."""
+    ingredientes = []
+    ingredient_lines = []
+    seen = set()
+    for ing in extended_ingredients:
+        name = ing.get('name', '').strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        amount = ing.get('amount') or 1
+        unit = ing.get('unit', '').strip()
+        try:
+            qty_f = float(amount)
+            cantidad = str(int(qty_f)) if qty_f == int(qty_f) else str(round(qty_f, 2))
+        except (TypeError, ValueError):
+            qty_f, cantidad = 1.0, '1'
+        if unit:
+            line = f"{cantidad} {unit} de {name}"
+        elif qty_f != 1:
+            line = f"{cantidad} {name}"
+        else:
+            line = name
+        ingredient_lines.append(line)
+        ingredientes.append({
+            'articulo':  name,
+            'cantidad':  cantidad,
+            'categoria': _cat_from_ingredient(name),
+        })
+    return ingredientes, ingredient_lines
 
 
 @app.route('/api/recipes/search', methods=['GET'])
@@ -913,52 +927,40 @@ def recipes_search(user_id):
     if not q:
         return jsonify({'error': 'q es requerido'}), 400
 
-    app_id  = app.config.get('EDAMAM_APP_ID')
-    app_key = app.config.get('EDAMAM_APP_KEY')
-    if not app_id or not app_key:
-        return jsonify({'error': 'Edamam no configurado', 'code': 'no_credentials'}), 503
+    api_key = app.config.get('SPOONACULAR_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'Spoonacular no configurado', 'code': 'no_credentials'}), 503
 
     try:
         resp = requests.get(
-            'https://api.edamam.com/api/recipes/v2',
-            params={'type': 'public', 'q': q, 'app_id': app_id, 'app_key': app_key, 'to': 20},
-            timeout=8,
+            'https://api.spoonacular.com/recipes/complexSearch',
+            params={
+                'query': q,
+                'language': 'es',
+                'addRecipeInformation': 'true',
+                'fillIngredients': 'true',
+                'number': 10,
+                'apiKey': api_key,
+            },
+            timeout=10,
         )
         resp.raise_for_status()
         data = resp.json()
     except Exception:
-        return jsonify({'error': 'Error al contactar Edamam'}), 502
-
-    if data.get('status') == 'error':
-        return jsonify({'error': data.get('message', 'Error Edamam')}), 502
+        return jsonify({'error': 'Error al contactar Spoonacular'}), 502
 
     results = []
-    for hit in data.get('hits', []):
-        r = hit.get('recipe', {})
-        uri = r.get('uri', '')
-        recipe_id = uri.split('#recipe_')[-1] if '#recipe_' in uri else ''
-        raw_ings = [ing for ing in r.get('ingredients', []) if ing.get('food', '').strip()]
-        foods_es = _translate_foods_es([ing['food'].strip() for ing in raw_ings])
-        ingredientes = []
-        for ing, food_es in zip(raw_ings, foods_es):
-            qty = ing.get('quantity') or 1
-            try:
-                qty_f = float(qty)
-                cantidad = str(int(qty_f)) if qty_f == int(qty_f) else str(round(qty_f, 2))
-            except (TypeError, ValueError):
-                cantidad = '1'
-            ingredientes.append({
-                'articulo':  food_es,
-                'cantidad':  cantidad,
-                'categoria': _cat_from_ingredient(food_es),
-            })
+    for r in data.get('results', []):
+        ingredientes, ingredient_lines = _parse_spoonacular_ingredients(
+            r.get('extendedIngredients', [])
+        )
         results.append({
-            'id': recipe_id,
-            'label': r.get('label', ''),
-            'image': r.get('image', ''),
-            'source': r.get('source', ''),
-            'ingredientLines': r.get('ingredientLines', []),
-            'ingredientes': ingredientes,
+            'id':              str(r.get('id', '')),
+            'label':           r.get('title', ''),
+            'image':           r.get('image', ''),
+            'source':          r.get('sourceName', '') or r.get('creditsText', ''),
+            'ingredientLines': ingredient_lines,
+            'ingredientes':    ingredientes,
         })
 
     return jsonify({'results': results, 'total': len(results)}), 200
@@ -967,51 +969,31 @@ def recipes_search(user_id):
 @app.route('/api/recipes/<recipe_id>', methods=['GET'])
 @token_required
 def recipes_get(user_id, recipe_id):
-    app_id  = app.config.get('EDAMAM_APP_ID')
-    app_key = app.config.get('EDAMAM_APP_KEY')
-    if not app_id or not app_key:
-        return jsonify({'error': 'Edamam no configurado', 'code': 'no_credentials'}), 503
+    api_key = app.config.get('SPOONACULAR_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'Spoonacular no configurado', 'code': 'no_credentials'}), 503
 
     try:
         resp = requests.get(
-            f'https://api.edamam.com/api/recipes/v2/{recipe_id}',
-            params={'type': 'public', 'app_id': app_id, 'app_key': app_key},
-            timeout=8,
+            f'https://api.spoonacular.com/recipes/{recipe_id}/information',
+            params={'language': 'es', 'apiKey': api_key},
+            timeout=10,
         )
         resp.raise_for_status()
-        data = resp.json()
+        r = resp.json()
     except Exception:
-        return jsonify({'error': 'Error al contactar Edamam'}), 502
+        return jsonify({'error': 'Error al contactar Spoonacular'}), 502
 
-    if data.get('status') == 'error':
-        return jsonify({'error': data.get('message', 'Error Edamam')}), 502
-
-    r = data.get('recipe')
-    if not r:
+    if not r.get('title'):
         return jsonify({'error': 'Receta no encontrada'}), 404
 
-    ingredientes = []
-    for ing in r.get('ingredients', []):
-        food = ing.get('food', '').strip()
-        if not food:
-            continue
-        qty = ing.get('quantity') or 1
-        try:
-            qty_f = float(qty)
-            cantidad = str(int(qty_f)) if qty_f == int(qty_f) else str(round(qty_f, 2))
-        except (TypeError, ValueError):
-            cantidad = '1'
-        ingredientes.append({
-            'articulo':  food,
-            'cantidad':  cantidad,
-            'categoria': _cat_from_ingredient(food),
-        })
+    ingredientes, _ = _parse_spoonacular_ingredients(r.get('extendedIngredients', []))
 
     return jsonify({
-        'id': recipe_id,
-        'label': r.get('label', ''),
-        'image': r.get('image', ''),
-        'source': r.get('source', ''),
+        'id':          str(r.get('id', '')),
+        'label':       r.get('title', ''),
+        'image':       r.get('image', ''),
+        'source':      r.get('sourceName', '') or r.get('creditsText', ''),
         'ingredientes': ingredientes,
     }), 200
 

@@ -55,8 +55,7 @@ Production env vars (Railway):
 | `FRONTEND_URL` | Frontend URL for password reset links |
 | `BREVO_API_KEY` | Brevo transactional email API key (HTTPS — Railway blocks SMTP) |
 | `EMAIL_REMITENTE` | Sender address verified in Brevo (e.g. your Gmail) |
-| `EDAMAM_APP_ID` | Edamam Recipe Search API app ID (free tier, 5 000 req/month) |
-| `EDAMAM_APP_KEY` | Edamam Recipe Search API key |
+| `SPOONACULAR_API_KEY` | Spoonacular Recipe Search API key (free tier, 150 pts/día) |
 
 Without `BREVO_API_KEY`, `forgot-password` still works — the reset link is printed to server logs.
 
@@ -66,10 +65,10 @@ Without `BREVO_API_KEY`, `forgot-password` still works — the reset link is pri
 
 Flat Flask app — no blueprints. All routes live in `app.py`.
 
-- `config.py` — Config classes selected by `FLASK_ENV`: `DevelopmentConfig` (SQLite), `ProductionConfig` (PostgreSQL via `DATABASE_URL`), `TestingConfig` (in-memory SQLite). Railway's `postgres://` URLs are rewritten to `postgresql://` here. Also defines `CATEGORIAS` (11 fixed categories), `FRONTEND_URL`, `EDAMAM_APP_ID/KEY`, and `INGREDIENT_CATEGORIES` (keyword dict — bilingual EN+ES — used by `_cat_from_ingredient()` to map ingredient names → project categories).
+- `config.py` — Config classes selected by `FLASK_ENV`: `DevelopmentConfig` (SQLite), `ProductionConfig` (PostgreSQL via `DATABASE_URL`), `TestingConfig` (in-memory SQLite). Railway's `postgres://` URLs are rewritten to `postgresql://` here. Also defines `CATEGORIAS` (11 fixed categories), `FRONTEND_URL`, `SPOONACULAR_API_KEY`, and `INGREDIENT_CATEGORIES` (keyword dict — bilingual EN+ES — used by `_cat_from_ingredient()` to map ingredient names → project categories).
 - `models.py` — Seven SQLAlchemy models: `User → ShoppingList → ShoppingItem` (cascading deletes), `PurchaseHistory` (standalone, no cascade), `CatalogItem` (user_id + articulo unique per user), `FamilyMember` (up to 5 per user, has `nombre` + `color`), and `Budget` (unique per user+mes, `mes` format `YYYY-MM`). `ShoppingList.monto_total` (Float, nullable) records the total spent on a shopping trip — captured from `ShoppingModePage`. `ShoppingItem.precio` (Float, nullable) and `PurchaseHistory.precio` (Float, nullable) store the price paid per unit, entered optionally in `ShoppingModePage`. `CatalogItem` is upserted automatically when an item is added to a list. `PurchaseHistory` is written when `comprado` is toggled `true` in the PUT endpoint (not on reset). `PurchaseHistory.list_id` is a plain `Integer` with **no FK constraint** — history is preserved when a list is deleted. `_es_comprado()` is defined but never called (dead code).
 - `auth.py` — Manual JWT via PyJWT. `@token_required` decorator injects `user_id` as first arg. Tokens expire in 30 days.
-- `app.py` — All REST routes. Multi-tenancy enforced by checking `lst.user_id == user_id` before every operation. Private helpers: `_calcular_sugeridos(user_id)`, `_cat_from_ingredient(text)`, `_translate_foods_es(foods)`.
+- `app.py` — All REST routes. Multi-tenancy enforced by checking `lst.user_id == user_id` before every operation. Private helpers: `_calcular_sugeridos(user_id)`, `_cat_from_ingredient(text)`, `_parse_spoonacular_ingredients(extended_ingredients)`.
 
 ### Backend Route Map
 
@@ -147,15 +146,15 @@ JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (la
 
 `_calcular_sugeridos(user_id)` analyzes the 4 complete ISO weeks before the current week. An article is included **only if it appears in all 4 weeks** (100% recurrence). `POST /api/suggested-list` checks for an existing "Mercado Semanal" in the current ISO week before creating (returns 409 with `list_id` if duplicate). The frontend button is disabled on non-Monday days.
 
-### Recetas (Edamam integration)
+### Recetas (Spoonacular integration)
 
-Uses **Edamam Recipe Search API v2** (`https://api.edamam.com/api/recipes/v2`). The v1 endpoint (`api.edamam.com/search`) is deprecated and returns 404 — do not use it.
+Uses **Spoonacular Recipe Search API** (`https://api.spoonacular.com/recipes/complexSearch`). Free tier: 150 puntos/día; cada búsqueda con `addRecipeInformation=true` y `number=10` cuesta ~11 puntos (~13 búsquedas/día).
 
-`GET /api/recipes/search` calls v2 with `type=public`, extracts the recipe `id` from the `uri` field (`#recipe_XXXX`), then translates all `food` names from English to Spanish via `_translate_foods_es()`. Translation uses the free Google Translate endpoint (`translate.googleapis.com/translate_a/single`) with no API key — all food names for one recipe are joined with `\n` in a single request. Falls back to English on error. The categorization via `_cat_from_ingredient()` runs on the **translated** Spanish name, which improves accuracy since `INGREDIENT_CATEGORIES` has Spanish keywords.
+`GET /api/recipes/search` llama a `complexSearch` con `language=es`, `addRecipeInformation=true`, `fillIngredients=true`, `number=10`. Los nombres de ingredientes llegan en español nativamente — no se requiere traducción. `_parse_spoonacular_ingredients()` convierte `extendedIngredients` en `(ingredientes, ingredient_lines)`, deduplicando por `name`. Retorna `503 { code: 'no_credentials' }` si `SPOONACULAR_API_KEY` no está configurado.
 
-`GET /api/recipes/<id>` calls `https://api.edamam.com/api/recipes/v2/{id}?type=public` and returns `{ recipe: {...} }` (single object, not a list). This endpoint exists but **is not called by the frontend** — `RecipesPage` uses `ingredientes` from the search results directly.
+`GET /api/recipes/<id>` llama a `https://api.spoonacular.com/recipes/{id}/information?language=es`. Existe pero **no es llamado por el frontend** — `RecipesPage` usa `ingredientes` de los resultados de búsqueda directamente.
 
-`POST /api/recipes/to-list` creates the list, items, and upserts the catalog in a single transaction. Without `EDAMAM_APP_ID/KEY`, search and to-list endpoints return `503 { code: 'no_credentials' }`.
+`POST /api/recipes/to-list` crea la lista, ítems y upsertea el catálogo en una sola transacción. Sin `SPOONACULAR_API_KEY`, search y to-list retornan `503 { code: 'no_credentials' }`.
 
 ### Frontend (`frontend/src/`)
 

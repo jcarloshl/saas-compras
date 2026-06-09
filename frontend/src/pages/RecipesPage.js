@@ -31,7 +31,7 @@ export default function RecipesPage() {
       setSearched(true);
     } catch (err) {
       if (err.response?.data?.code === 'no_credentials') {
-        setSearchError('Las credenciales de Edamam no están configuradas. Agrega EDAMAM_APP_ID y EDAMAM_APP_KEY al entorno.');
+        setSearchError('Las credenciales de Spoonacular no están configuradas. Agrega SPOONACULAR_API_KEY al entorno.');
       } else {
         setSearchError('No se pudo buscar. Revisa tu conexión e intenta de nuevo.');
       }

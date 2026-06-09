@@ -15,9 +15,8 @@ class Config:
     EMAIL_REMITENTE = os.environ.get('EMAIL_REMITENTE')
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
-    # Edamam Recipe Search API
-    EDAMAM_APP_ID  = os.environ.get('EDAMAM_APP_ID')
-    EDAMAM_APP_KEY = os.environ.get('EDAMAM_APP_KEY')
+    # Spoonacular Recipe Search API
+    SPOONACULAR_API_KEY = os.environ.get('SPOONACULAR_API_KEY')
 
     # Mapeo de keywords de ingredientes → categorías del proyecto
     INGREDIENT_CATEGORIES = {
