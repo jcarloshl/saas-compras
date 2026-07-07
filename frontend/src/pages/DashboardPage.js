@@ -100,7 +100,7 @@ export default function DashboardPage() {
   const isMonday = new Date().getDay() === 1;
   const [showSuggestedModal, setShowSuggestedModal] = useState(false);
   const [suggestedItems, setSuggestedItems] = useState([]);
-  const [suggestedMeta, setSuggestedMeta] = useState({ semanas_disponibles: 0, semanas_requeridas: 4 });
+  const [suggestedMeta, setSuggestedMeta] = useState({ semanas_disponibles: 0, semanas_requeridas: 2 });
   const [suggestedLoading, setSuggestedLoading] = useState(false);
   const [suggestedCreating, setSuggestedCreating] = useState(false);
 
@@ -110,7 +110,7 @@ export default function DashboardPage() {
       const res = await suggestedAPI.preview();
       setSuggestedItems(res.data.items);
       setSuggestedMeta({ semanas_disponibles: res.data.semanas_disponibles, semanas_requeridas: res.data.semanas_requeridas });
-    } catch { setSuggestedMeta({ semanas_disponibles: 0, semanas_requeridas: 4 }); }
+    } catch { setSuggestedMeta({ semanas_disponibles: 0, semanas_requeridas: 2 }); }
     finally { setSuggestedLoading(false); }
   };
 
@@ -470,7 +470,7 @@ export default function DashboardPage() {
                   <div style={{ fontSize: 48 }}>📅</div>
                   <p style={{ marginTop: 12, fontWeight: 600, fontSize: 16, color: T.ink }}>Historial insuficiente</p>
                   <p style={{ color: T.muted, fontSize: 13.5, lineHeight: 1.5 }}>
-                    Necesitás al menos <strong>4 semanas</strong> de compras registradas.<br/>
+                    Necesitás al menos <strong>{suggestedMeta.semanas_requeridas} semanas</strong> de compras registradas.<br/>
                     Tenés {suggestedMeta.semanas_disponibles} semana{suggestedMeta.semanas_disponibles !== 1 ? 's' : ''} hasta ahora.
                   </p>
                 </div>
@@ -478,12 +478,12 @@ export default function DashboardPage() {
                 <div style={{ textAlign: 'center', padding: '30px 20px' }}>
                   <div style={{ fontSize: 48 }}>🤔</div>
                   <p style={{ marginTop: 12, fontWeight: 600, fontSize: 16, color: T.ink }}>Sin artículos recurrentes</p>
-                  <p style={{ color: T.muted, fontSize: 13.5 }}>Todavía no hay artículos comprados las 4 semanas seguidas.</p>
+                  <p style={{ color: T.muted, fontSize: 13.5 }}>Todavía no hay artículos que compres seguido (al menos 2 de las últimas 3 semanas).</p>
                 </div>
               ) : (
                 <>
                   <p style={{ color: T.muted, fontSize: 12.5, marginBottom: 14 }}>
-                    {suggestedItems.length} artículo{suggestedItems.length !== 1 ? 's' : ''} comprados todas las semanas:
+                    {suggestedItems.length} artículo{suggestedItems.length !== 1 ? 's' : ''} que comprás seguido:
                   </p>
                   {Object.entries(
                     suggestedItems.reduce((acc, it) => { const cat = it.categoria || 'Otros'; (acc[cat] = acc[cat] || []).push(it); return acc; }, {})

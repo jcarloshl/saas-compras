@@ -145,7 +145,7 @@ JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (la
 
 ### Mercado Semanal (suggested weekly list)
 
-`_calcular_sugeridos(user_id)` analyzes the 3 complete ISO weeks before the current week. An article is included **only if it appears in all 3 weeks** (100% recurrence). `POST /api/suggested-list` checks for an existing "Mercado Semanal" in the current ISO week before creating (returns 409 with `list_id` if duplicate). The frontend button is disabled on non-Monday days.
+`_calcular_sugeridos(user_id)` analyzes the `SEMANAS_VENTANA` (3) complete ISO weeks before the current week. An article is included if it appears in **at least `MIN_SEMANAS_RECURRENCIA` (2) of those weeks** (intersection with the expected week set). Both thresholds are module-level constants in `app.py`. `GET /api/suggested-list` returns `semanas_requeridas` (= `MIN_SEMANAS_RECURRENCIA`) and `semanas_ventana` (= `SEMANAS_VENTANA`). `POST /api/suggested-list` checks for an existing "Mercado Semanal" in the current ISO week before creating (returns 409 with `list_id` if duplicate). The frontend button is disabled on non-Monday days.
 
 ### Recetas (Spoonacular integration)
 

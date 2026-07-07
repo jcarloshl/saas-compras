@@ -615,18 +615,25 @@ def delete_catalog_item(user_id, entry_id):
 #  LISTA SUGERIDA SEMANAL
 # ─────────────────────────────────────────────
 
+# Ventana de análisis (semanas ISO completas previas) y umbral de recurrencia:
+# un artículo se sugiere si aparece en al menos MIN_SEMANAS_RECURRENCIA de ellas.
+SEMANAS_VENTANA = 3
+MIN_SEMANAS_RECURRENCIA = 2
+
+
 def _calcular_sugeridos(user_id):
-    """Devuelve artículos comprados las 3 semanas ISO completas anteriores a la actual."""
+    """Devuelve artículos comprados en al menos MIN_SEMANAS_RECURRENCIA de las
+    SEMANAS_VENTANA semanas ISO completas anteriores a la actual."""
     hoy = datetime.utcnow()
     inicio_semana_actual = (hoy - timedelta(days=hoy.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
-    cutoff_ini = inicio_semana_actual - timedelta(weeks=3)
+    cutoff_ini = inicio_semana_actual - timedelta(weeks=SEMANAS_VENTANA)
     cutoff_fin = inicio_semana_actual
 
-    # Semanas ISO esperadas (exactamente 3)
+    # Semanas ISO esperadas dentro de la ventana
     semanas_esperadas = set()
-    for i in range(3):
+    for i in range(SEMANAS_VENTANA):
         d = cutoff_ini + timedelta(weeks=i)
         semanas_esperadas.add(d.isocalendar()[1])
 
@@ -647,7 +654,9 @@ def _calcular_sugeridos(user_id):
 
     sugeridos = []
     for articulo, weeks in article_weeks.items():
-        if weeks != semanas_esperadas:
+        # Sugerir si el artículo aparece en al menos MIN_SEMANAS_RECURRENCIA
+        # de las semanas de la ventana (antes exigía las 3/3)
+        if len(weeks & semanas_esperadas) < MIN_SEMANAS_RECURRENCIA:
             continue
         cantidades = [d['cantidad'] for d in article_data[articulo]]
         categorias = [d['categoria'] for d in article_data[articulo]]
@@ -664,20 +673,21 @@ def _calcular_sugeridos(user_id):
 @app.route('/api/suggested-list', methods=['GET'])
 @token_required
 def get_suggested_list(user_id):
-    """Preview de artículos recurrentes en las últimas 3 semanas"""
+    """Preview de artículos recurrentes en las últimas semanas"""
     sugeridos, semanas_disponibles = _calcular_sugeridos(user_id)
     return jsonify({
         'items': sugeridos,
         'total': len(sugeridos),
         'semanas_disponibles': semanas_disponibles,
-        'semanas_requeridas': 3,
+        'semanas_requeridas': MIN_SEMANAS_RECURRENCIA,
+        'semanas_ventana': SEMANAS_VENTANA,
     }), 200
 
 
 @app.route('/api/suggested-list', methods=['POST'])
 @token_required
 def create_suggested_list(user_id):
-    """Crea la lista 'Mercado Semanal' con los artículos recurrentes de las últimas 4 semanas"""
+    """Crea la lista 'Mercado Semanal' con los artículos recurrentes de las últimas semanas"""
     # Verificar si ya existe una lista "Mercado Semanal" creada en la semana ISO actual
     hoy = datetime.utcnow()
     inicio_semana_actual = (hoy - timedelta(days=hoy.weekday())).replace(
