@@ -120,4 +120,10 @@ config = {
 def get_config():
     """Return config object based on environment"""
     env = os.environ.get('FLASK_ENV', 'development')
-    return config.get(env, config['default'])
+    cfg = config.get(env, config['default'])
+    # SECRET_KEY es obligatoria en producción: sin ella cualquiera podría forjar JWTs
+    if cfg is ProductionConfig and not os.environ.get('SECRET_KEY'):
+        raise RuntimeError(
+            'SECRET_KEY no está definida. Configúrala como variable de entorno en producción.'
+        )
+    return cfg

@@ -114,13 +114,14 @@ GET    /api/budget?mes=YYYY-MM               returns { id, monto_limite, gasto_a
 POST   /api/budget                           upsert { mes, monto_limite } — float() validated, 400 on bad input
 DELETE /api/budget/<id>                      ownership-checked delete
 
-GET    /api/recipes/search                   @token_required — ?q= — calls Edamam v2; returns { results: [...], total }
+GET    /api/recipes/search                   @token_required — ?q= — calls Spoonacular complexSearch (language=es);
+                                             returns { results: [...], total }
                                              results: [{ id, label, image, source, ingredientLines,
                                              ingredientes: [{ articulo, cantidad, categoria }] }]
-                                             articulo is translated to Spanish via _translate_foods_es().
-                                             503 if EDAMAM_APP_ID/KEY not set
+                                             ingredientes come in Spanish natively (no translation).
+                                             503 { code: 'no_credentials' } if SPOONACULAR_API_KEY not set
 
-GET    /api/recipes/<recipe_id>              @token_required — detail via Edamam v2 /api/recipes/v2/{id}
+GET    /api/recipes/<recipe_id>              @token_required — detail via Spoonacular /recipes/{id}/information?language=es
                                              returns { id, label, image, source, ingredientes: [...] }
                                              NOT called by RecipesPage (ingredientes already in search results)
 
@@ -144,7 +145,7 @@ JWT-based stateless tokens — no extra DB table. Token payload has `pwd_fp` (la
 
 ### Mercado Semanal (suggested weekly list)
 
-`_calcular_sugeridos(user_id)` analyzes the 4 complete ISO weeks before the current week. An article is included **only if it appears in all 4 weeks** (100% recurrence). `POST /api/suggested-list` checks for an existing "Mercado Semanal" in the current ISO week before creating (returns 409 with `list_id` if duplicate). The frontend button is disabled on non-Monday days.
+`_calcular_sugeridos(user_id)` analyzes the 3 complete ISO weeks before the current week. An article is included **only if it appears in all 3 weeks** (100% recurrence). `POST /api/suggested-list` checks for an existing "Mercado Semanal" in the current ISO week before creating (returns 409 with `list_id` if duplicate). The frontend button is disabled on non-Monday days.
 
 ### Recetas (Spoonacular integration)
 
@@ -229,7 +230,7 @@ All pages are lazy-loaded. Routes:
 - **ProductDetailPage** — loads `statsAPI.getArticulo(decodeURIComponent(articulo))`; re-fetches if `:articulo` param changes; hero with emoji + category + "Recurrente" badge (if `semanas_distintas > 2`); 3-col stats grid (Total, Este Año, Última); horizontal percentage bars for `quien_anade_mas`; "Volver al catálogo" uses `navigate('/catalog', { replace: true })` to avoid adding a back-stack entry.
 - **FamilyPage** — CRUD for up to 5 family members. Each member has `nombre` + `color` (color picker). "Soy yo" button saves the member to `localStorage('cesta_member')` and navigates to `/dashboard`. Edit inline; delete with confirmation dialog.
 - **BudgetPage** — month selector (last 6 months); main card shows gasto vs. límite with `AProgressBar` + alert if ≥80%; "Definir límite" / "Editar" opens a bottom-sheet modal; category breakdown shows item counts (not amounts — labeled as "estimación"); yellow warning banner when `advertencia_listas_sin_monto` is true (lists without `monto_total` in that month).
-- **RecipesPage** — `ChevL` → `/dashboard`; search input + submit calls `recipesAPI.search(q)`; results in 2-col image grid; tapping a card opens a bottom-sheet with `ingredientLines` (human-readable, English from Edamam) + "Crear lista de compras" button; button calls `recipesAPI.toList(selected.label, selected.ingredientes)` directly — `ingredientes` (in Spanish) come from the search results, no second API call needed. Returns 503 with `code: 'no_credentials'` if Edamam env vars are missing.
+- **RecipesPage** — `ChevL` → `/dashboard`; search input + submit calls `recipesAPI.search(q)`; results in 2-col image grid; tapping a card opens a bottom-sheet with `ingredientLines` (human-readable, in Spanish from Spoonacular) + "Crear lista de compras" button; button calls `recipesAPI.toList(selected.label, selected.ingredientes)` directly — `ingredientes` (in Spanish) come from the search results, no second API call needed. Returns 503 with `code: 'no_credentials'` if `SPOONACULAR_API_KEY` is missing.
 
 ### Design system conventions
 

@@ -1,5 +1,7 @@
 """Main Flask application"""
 import os
+import re
+import html
 import jwt
 import threading
 import requests
@@ -28,6 +30,24 @@ with app.app_context():
     db.create_all()
 
 
+# Validación básica de formato de email (suficiente para uso normal, no RFC completo)
+EMAIL_RE = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+
+
+class _InvalidNumber(ValueError):
+    """Error interno para señalar un valor numérico opcional inválido."""
+
+
+def _parse_optional_float(val):
+    """Convierte val a float o None (para '' / None). Lanza _InvalidNumber si no es numérico."""
+    if val in (None, ''):
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        raise _InvalidNumber()
+
+
 # ─────────────────────────────────────────────
 #  AUTH ROUTES
 # ─────────────────────────────────────────────
@@ -41,12 +61,23 @@ def register():
     if not all(k in data for k in ('email', 'password', 'username')):
         return jsonify({'error': 'Missing fields'}), 400
 
-    if User.query.filter_by(email=data['email']).first():
+    email = str(data.get('email') or '').strip().lower()
+    username = str(data.get('username') or '').strip()
+    password = data.get('password') or ''
+
+    if not EMAIL_RE.fullmatch(email):
+        return jsonify({'error': 'Email inválido'}), 400
+    if not username:
+        return jsonify({'error': 'El nombre de usuario es requerido'}), 400
+    if len(password) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+
+    if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists'}), 409
 
     # Crear usuario
-    user = User(email=data['email'], username=data['username'])
-    user.set_password(data['password'])
+    user = User(email=email, username=username)
+    user.set_password(password)
     db.session.add(user)
     db.session.commit()
 
@@ -66,7 +97,8 @@ def login():
     if not all(k in data for k in ('email', 'password')):
         return jsonify({'error': 'Missing fields'}), 400
 
-    user = User.query.filter_by(email=data['email']).first()
+    email = str(data.get('email') or '').strip().lower()
+    user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(data['password']):
         return jsonify({'error': 'Invalid credentials'}), 401
 
@@ -122,10 +154,11 @@ def _send_reset_email(to_email, username, reset_link):
         app.logger.info(f"[DEV] Enlace de reset para {to_email}: {reset_link}")
         return
 
+    safe_username = html.escape(username)
     html_body = f"""
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
       <h2 style="color:#C76A4D">Lista de Compras</h2>
-      <p>Hola <strong>{username}</strong>,</p>
+      <p>Hola <strong>{safe_username}</strong>,</p>
       <p>Recibimos una solicitud para restablecer tu contraseña.
          Haz clic en el botón para crear una nueva:</p>
       <a href="{reset_link}"
@@ -278,11 +311,13 @@ def update_list(user_id, list_id):
         return jsonify({'error': 'List not found'}), 404
 
     data = request.json or {}
-    if 'name' in data and data['name'].strip():
-        lst.name = data['name'].strip()
+    if 'name' in data and str(data['name']).strip():
+        lst.name = str(data['name']).strip()
     if 'monto_total' in data:
-        val = data['monto_total']
-        lst.monto_total = float(val) if val not in (None, '') else None
+        try:
+            lst.monto_total = _parse_optional_float(data['monto_total'])
+        except _InvalidNumber:
+            return jsonify({'error': 'monto_total debe ser un número válido'}), 400
 
     db.session.commit()
     return jsonify(lst.to_dict()), 200
@@ -385,12 +420,19 @@ def update_item(user_id, list_id, item_id):
 
     data = request.json or {}
 
+    # Parsear precio una vez (usado tanto en historial como en el ítem)
+    try:
+        precio_val = _parse_optional_float(data['precio']) if 'precio' in data else None
+    except _InvalidNumber:
+        return jsonify({'error': 'precio debe ser un número válido'}), 400
+
     # Permitir actualizar: comprado, cantidad, categoria, agregado_por, precio
     if 'comprado' in data:
+        if not isinstance(data['comprado'], bool):
+            return jsonify({'error': 'comprado debe ser booleano'}), 400
         was_comprado = item.comprado
         item.comprado = data['comprado']
         if data['comprado'] and not was_comprado:
-            raw_precio = data.get('precio')
             db.session.add(PurchaseHistory(
                 user_id=user_id,
                 list_id=list_id,
@@ -399,7 +441,7 @@ def update_item(user_id, list_id, item_id):
                 cantidad=item.cantidad,
                 categoria=item.categoria,
                 agregado_por=item.agregado_por,
-                precio=float(raw_precio) if raw_precio not in (None, '') else None,
+                precio=precio_val,
             ))
     if 'cantidad' in data:
         item.cantidad = data['cantidad']
@@ -408,8 +450,7 @@ def update_item(user_id, list_id, item_id):
     if 'agregado_por' in data:
         item.agregado_por = data['agregado_por']
     if 'precio' in data:
-        val = data['precio']
-        item.precio = float(val) if val not in (None, '') else None
+        item.precio = precio_val
 
     db.session.commit()
 
@@ -575,15 +616,17 @@ def delete_catalog_item(user_id, entry_id):
 # ─────────────────────────────────────────────
 
 def _calcular_sugeridos(user_id):
-    """Devuelve artículos comprados las 4 semanas ISO completas anteriores a la actual."""
+    """Devuelve artículos comprados las 3 semanas ISO completas anteriores a la actual."""
     hoy = datetime.utcnow()
-    inicio_semana_actual = hoy - timedelta(days=hoy.weekday())
-    cutoff_ini = inicio_semana_actual - timedelta(weeks=4)
+    inicio_semana_actual = (hoy - timedelta(days=hoy.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    cutoff_ini = inicio_semana_actual - timedelta(weeks=3)
     cutoff_fin = inicio_semana_actual
 
-    # Semanas ISO esperadas (exactamente 4)
+    # Semanas ISO esperadas (exactamente 3)
     semanas_esperadas = set()
-    for i in range(4):
+    for i in range(3):
         d = cutoff_ini + timedelta(weeks=i)
         semanas_esperadas.add(d.isocalendar()[1])
 
@@ -621,13 +664,13 @@ def _calcular_sugeridos(user_id):
 @app.route('/api/suggested-list', methods=['GET'])
 @token_required
 def get_suggested_list(user_id):
-    """Preview de artículos recurrentes en las últimas 4 semanas"""
+    """Preview de artículos recurrentes en las últimas 3 semanas"""
     sugeridos, semanas_disponibles = _calcular_sugeridos(user_id)
     return jsonify({
         'items': sugeridos,
         'total': len(sugeridos),
         'semanas_disponibles': semanas_disponibles,
-        'semanas_requeridas': 4,
+        'semanas_requeridas': 3,
     }), 200
 
 
@@ -637,7 +680,9 @@ def create_suggested_list(user_id):
     """Crea la lista 'Mercado Semanal' con los artículos recurrentes de las últimas 4 semanas"""
     # Verificar si ya existe una lista "Mercado Semanal" creada en la semana ISO actual
     hoy = datetime.utcnow()
-    inicio_semana_actual = hoy - timedelta(days=hoy.weekday())
+    inicio_semana_actual = (hoy - timedelta(days=hoy.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
     fin_semana_actual = inicio_semana_actual + timedelta(weeks=1)
 
     existente = ShoppingList.query.filter(
@@ -787,7 +832,6 @@ def delete_family_member(user_id, member_id):
 @app.route('/api/budget', methods=['GET'])
 @token_required
 def get_budget(user_id):
-    import re
     mes = request.args.get('mes', datetime.utcnow().strftime('%Y-%m'))
     if not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', mes):
         return jsonify({'error': 'Formato de mes inválido. Use YYYY-MM (ej: 2026-05)'}), 400
@@ -843,6 +887,8 @@ def get_budget(user_id):
 def upsert_budget(user_id):
     data = request.get_json() or {}
     mes = data.get('mes', datetime.utcnow().strftime('%Y-%m'))
+    if not re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', mes):
+        return jsonify({'error': 'Formato de mes inválido. Use YYYY-MM (ej: 2026-05)'}), 400
     monto_limite = data.get('monto_limite')
     if monto_limite is None:
         return jsonify({'error': 'monto_limite es requerido'}), 400

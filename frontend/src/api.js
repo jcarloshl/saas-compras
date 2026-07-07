@@ -23,7 +23,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || '';
+    // No redirigir en fallos de login/registro: el 401 ahí es "credenciales inválidas"
+    // y la página debe poder mostrar su propio mensaje de error.
+    const isAuthAttempt = url.includes('/api/auth/login') || url.includes('/api/auth/register');
+    if (error.response?.status === 401 && !isAuthAttempt) {
       // Token expirado o inválido
       localStorage.removeItem('token');
       localStorage.removeItem('user');

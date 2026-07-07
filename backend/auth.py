@@ -20,13 +20,19 @@ def create_token(user_id):
 
 
 def verify_token(token):
-    """Verificar y decodificar JWT token"""
+    """Verificar y decodificar JWT token de sesión.
+
+    Rechaza tokens de acción especial (ej. reset de contraseña) para que un
+    enlace de recuperación no pueda usarse como token de sesión.
+    """
     try:
         payload = jwt.decode(
             token,
             current_app.config['SECRET_KEY'],
             algorithms=['HS256']
         )
+        if payload.get('action'):
+            return None
         return payload.get('user_id')
     except jwt.ExpiredSignatureError:
         return None
